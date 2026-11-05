@@ -47,3 +47,5 @@ En laptop, tablet y celular se confirmó el viewportCSSreal, sin overflowhorizon
 ### Evidencia final del picking
 
 La versión recompilada abre BusPopup al hacer click en la coordenada GPU de MB-4006: L4, Convencional, sentido Buenavista, velocidad simulada37km/h y próxima estación BuenavistaL4. «Seguir unidad» dejó el botón con estado activo y la cámara siguió la unidad. El popup medido en el viewport normal1280×1100 quedó entre x958–1250 y y798–1056. El mapa permaneció ready. Se comprobó mediante eventosdelcanvas en coordenadas reales, no escribiendo directamente el store. El hover se había observado con cursor real. Pasan TypeScript,11tests/6suites y build deproducción; auditoría deproducción sin avisosconocidos. Lasresoluciones390×844,768×1024 y1440×900 se validaron sin desbordamiento horizontal.
+
+El modo grabación entró y salió mediante sus botones: contador100, clase is-recording activada/desactivada y mapa ready en ambos estados. La cuenta de validación cerró sesión mediante el botón normal. El código se aceptó en origin/main con SHA257ddf2cef3ff5be870055d6c50e3aa9bf14b93c. Auto-publish está desactivado; no se solicitó ni ejecutó publicación.
