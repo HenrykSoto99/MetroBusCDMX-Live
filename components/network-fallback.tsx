@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { Coordinate, Station, TransitLine, TransitNetwork, Vehicle } from "@/lib/transit-types";
+import { usePreferences, useTranslation } from "@/lib/preferences";
 
 export interface NetworkFallbackProps {
   network: TransitNetwork;
@@ -73,8 +74,11 @@ export function NetworkFallback({
   onStationSelect,
   onRetry,
   showRetry = true,
-  retryLabel = "Reintentar mapa",
+  retryLabel,
 }: NetworkFallbackProps) {
+  const { theme } = usePreferences();
+  const { t } = useTranslation();
+  const background = theme === "light" ? "#f4f5f2" : "#101822";
   const selectedIds = useMemo(() => new Set(selectedLineIds(selectedLines)), [selectedLines]);
   const lines = useMemo(
     () => network.lines.filter((line) => selectedIds.has(line.id)),
@@ -90,7 +94,7 @@ export function NetworkFallback({
   return (
     <div className="map-fallback absolute inset-0 overflow-hidden bg-[#101822] text-white">
       <svg
-        aria-label="Vista esquemática de la red de Metrobús"
+        aria-label={t("Vista esquemática de la red de Metrobús", "Schematic view of the Metrobús network")}
         className="absolute inset-0 h-full w-full"
         preserveAspectRatio="xMidYMid meet"
         role="img"
@@ -101,8 +105,8 @@ export function NetworkFallback({
             <feGaussianBlur stdDeviation="4" />
           </filter>
         </defs>
-        <rect fill="#101822" height={VIEWBOX_HEIGHT} width={VIEWBOX_WIDTH} />
-        <g aria-label="Rutas">
+        <rect fill={background} height={VIEWBOX_HEIGHT} width={VIEWBOX_WIDTH} />
+        <g aria-label={t("Rutas", "Routes")}>
           {lines.map((line) => (
             <g key={`fallback-route-${line.id}`}>
               <path
@@ -127,32 +131,34 @@ export function NetworkFallback({
             </g>
           ))}
         </g>
-        <g aria-label="Estaciones">
+        <g aria-label={t("Estaciones", "Stations")}>
           {lines.flatMap((line) =>
             line.stations.map((station) => {
               const point = projectPoint(station.coordinates, bounds);
               return (
-                <circle
+                <g
                   key={`fallback-station-${line.id}-${station.id}`}
-                  cx={point.x}
-                  cy={point.y}
-                  fill="#f8fafc"
-                  r="2.8"
-                  stroke={line.color}
-                  strokeWidth="1.5"
+                  className="cursor-pointer"
+                  role="button"
+                  aria-label={`${station.name} · ${line.code}`}
                   tabIndex={0}
                   onClick={() => onStationSelect?.(station, line.id)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") onStationSelect?.(station, line.id);
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onStationSelect?.(station, line.id);
+                    }
                   }}
                 >
-                  <title>{`${station.name} · ${line.code}`}</title>
-                </circle>
+                  <circle cx={point.x} cy={point.y} r="11" fill={background} stroke={line.color} strokeWidth="2" />
+                  <image href="/brand/station-mb.svg" x={point.x - 9} y={point.y - 9} width="18" height="18" />
+                  <title>{`${station.name} · ${line.code} · ID: ${station.id}`}</title>
+                </g>
               );
             }),
           )}
         </g>
-        <g aria-label="Vehículos">
+        <g aria-label={t("Vehículos", "Vehicles")}>
           {visibleVehicles.map((vehicle) => {
             const line = lineById.get(vehicle.line_id);
             if (!line || !Number.isFinite(vehicle.longitude) || !Number.isFinite(vehicle.latitude)) return null;
@@ -171,7 +177,7 @@ export function NetworkFallback({
               >
                 <circle cx={point.x} cy={point.y} fill={line.color} opacity="0.35" r={selected ? 13 : 9} filter="url(#network-fallback-glow)" />
                 <circle cx={point.x} cy={point.y} fill={line.color} r={selected ? 5.5 : 3.8} stroke={selected ? "#f8fafc" : "#0b1017"} strokeWidth={selected ? 2.5 : 1.25} />
-                <title>{`${line.code} · ${vehicle.id} · ${Math.round(vehicle.speed)} km/h · Próxima: ${vehicle.next_stop}`}</title>
+                <title>{`${line.code} · ${vehicle.id} · ${Math.round(vehicle.speed)} km/h · ${t("Próxima", "Next")}: ${vehicle.next_stop}`}</title>
               </g>
             );
           })}
@@ -179,7 +185,7 @@ export function NetworkFallback({
       </svg>
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-4 p-4">
         <div className="map-fallback-note max-w-sm rounded-md border border-white/15 bg-[#101822]/85 px-3 py-2 text-xs text-white/80 shadow-lg backdrop-blur-sm">
-          Vista de red · base cartográfica no disponible
+          {t("Vista de red · base cartográfica no disponible", "Network view · basemap unavailable")}
         </div>
         <div className="text-right text-[10px] tracking-wide text-white/50">CARTO · OpenStreetMap</div>
       </div>
@@ -189,7 +195,7 @@ export function NetworkFallback({
           type="button"
           onClick={onRetry}
         >
-          {retryLabel}
+          {retryLabel || t("Reintentar mapa", "Retry map")}
         </button>
       ) : null}
     </div>

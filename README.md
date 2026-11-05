@@ -28,6 +28,8 @@ Las variables definidas en `.env.local` deben estar cargadas para el script de m
 
 En Vercel, declara los valores en el panel de variables protegidas. En Manus, usa la tarjeta segura del proyecto; no pegues secretos en chats, código o URLs públicas. No se requiere una API key de CARTO para el estilo público utilizado.
 
+En Netlify, consulta [la revisión y guía de despliegue](docs/netlify-deployment.md). El repositorio incluye `netlify.toml`: build `pnpm build`, publish `.next`, Node 22 y pnpm con hoisting. Se requiere MySQL externo, migración separada y variables de auth con alcance Functions/Builds. No uses un export estático ni el Dockerfile para ese hosting; OpenNext gestiona el runtime. El repositorio privado está en [HenrykSoto99/MetroBusCDMX-Live](https://github.com/HenrykSoto99/MetroBusCDMX-Live).
+
 ## Rutas y estructura
 
 `/` es la landing pública; `/login` y `/register` gestionan sesiones reales; `/app` requiere sesión validada del lado servidor. `/docs` explica fuentes y límites y `/privacy` describe el uso real de los datos. `/api/fleet` requiere autenticación y sirve snapshots privados; `/api/network` ofrece la red GTFS pública. `/api/health` es el health check público. `public/manus-routes.json` enumera las páginas del proyecto.
@@ -78,3 +80,11 @@ MapLibre6 requiere configurar su worker ESM antes de crear el mapa. LiveMap usa 
 La animación de unidades y la órbita se limitan a 60 actualizaciones por segundo; esto es un presupuesto máximo, no una promesa de FPS en todo hardware. TripsLayer usa segundos relativos y el frente de estela se sincroniza con la interpolación lineal. El hook cancela peticiones al desmontar y descarta respuestas de instancias anteriores. Las preferencias de filtros son locales; las posiciones no se persisten en el navegador.
 
 La familia deck.gl está fijada a9.4.1. Los overrides de parsers y el parche de compatibilidad del CLI de texturas están declarados en pnpm-workspace.yaml y patches/. Son parte del lockfile y del Dockerfile; no se necesita editar node_modules al desplegar.
+
+## Idioma, apariencia y estaciones
+
+El control ES/EN cambia el idioma de la interfaz sin traducir los nombres propios del GTFS. El control de sol/luna alterna claro/oscuro; idioma y tema se guardan localmente, sin cuentas ni posiciones. El mapa conserva la cámara al alternar CARTO Dark Matter y Positron. `NEXT_PUBLIC_LIGHT_MAP_STYLE_URL` permite un estilo claro compatible opcional; nunca incluyas tokens privados en estilos públicos. El valor inicial sigue ES/dark.
+
+Los marcadores MB de estación ahora usan IconLayer y un atlas local, crecen con el zoom y muestran datos al hover/click/tap. La tarjeta incluye nombre, línea, ID y coordenadas, y acepta pictogramas con fuentes verificables. Ver [notas de identidad de estaciones](docs/station-markers.md). El fallback MB no se atribuye como pictograma oficial. «Salir» invalida la sesión y vuelve a la landing en `/` tanto en escritorio como móvil.
+
+Los logos aportados posteriormente por el usuario sustituyen el símbolo de marca: el primero en landing/acceso y el segundo en rail/app, modo cinematográfico y favicon. Los PNG originales se conservan en `public/brand/user-landing-original.png` y `user-app-original.png`. El derivado de landing elimina solo padding transparente; el de app conserva proporciones y colores.

@@ -5,8 +5,9 @@ import { signOut } from "next-auth/react";
 import { useMemo, useState } from "react";
 import { Activity, ArrowUpRight, Bell, BusFront, Check, ChevronDown, ChevronLeft, ChevronRight, Code2, ExternalLink, HelpCircle, Layers3, LogOut, Route, Search, Video, X } from "lucide-react";
 import { useDashboard } from "@/stores/dashboard";
-import { SERVICE_LABELS, type Coordinate, type FleetSnapshot, type Station, type TransitLine, type TransitNetwork } from "@/lib/transit-types";
+import { SERVICE_LABELS, type Coordinate, type FleetSnapshot, type ServiceType, type Station, type TransitLine, type TransitNetwork } from "@/lib/transit-types";
 import type { ApiTrace } from "@/lib/useLiveBuses";
+import { useTranslation } from "@/lib/preferences";
 import { AnimatedCounter } from "./animated-counter";
 
 export interface SidebarUser {
@@ -36,18 +37,31 @@ interface SearchResult {
   station?: Station;
 }
 
+type Translate = (es: string, en: string) => string;
+
+const SERVICE_LABELS_EN: Record<ServiceType, string> = {
+  articulado: "Articulated",
+  biarticulado: "Bi-articulated",
+  "doble-piso": "Double-decker",
+  convencional: "Standard",
+};
+
 function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("es-MX", {
+function formatTime(value: string, locale: string) {
+  return new Date(value).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
     timeZone: "America/Mexico_City",
   });
+}
+
+function serviceLabel(value: ServiceType, t: Translate) {
+  return t(SERVICE_LABELS[value], SERVICE_LABELS_EN[value]);
 }
 
 export function Sidebar({
@@ -66,6 +80,7 @@ export function Sidebar({
   onSelectionReset,
 }: SidebarProps) {
   const state = useDashboard();
+  const { locale, t } = useTranslation();
   const [query, setQuery] = useState("");
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const allLineIds = useMemo(() => network.lines.map((line) => line.id), [network.lines]);
@@ -96,7 +111,7 @@ export function Sidebar({
     const term = normalize(query.trim());
     const matches: SearchResult[] = [];
     for (const line of network.lines) {
-      if (normalize(`${line.code} ${line.name} linea ${line.id} ${line.from} ${line.to}`).includes(term)) matches.push({ key: line.code, line });
+      if (normalize(`${line.code} ${line.name} linea line route ${line.id} ${line.from} ${line.to}`).includes(term)) matches.push({ key: line.code, line });
       for (const station of line.stations) {
         if (normalize(station.name).includes(term)) matches.push({ key: `${line.id}-${station.id}`, line, station });
       }
@@ -130,32 +145,34 @@ export function Sidebar({
     state.setServiceFilter(service);
     onSelectionReset();
   };
-  const sourceLabel = fleet.source === "gtfs-rt" ? "GTFS-RT" : "SIMULACIÓN";
+  const sourceLabel = fleet.source === "gtfs-rt" ? "GTFS-RT" : t("SIMULACIÓN", "SIMULATION");
+  const liveStatus = fleet.source === "gtfs-rt" ? t("en vivo", "live") : t("simuladas", "simulated");
+  const accountLabel = user.name ?? user.email ?? t("Tu cuenta", "Your account");
 
   return (
     <div className="sidebar-content">
-      <div className="panel-heading"><span className="eyebrow">EL PULSO DE LA CDMX</span><button className="icon-button panel-close" aria-label="Cerrar panel" onClick={onClose}><ChevronLeft size={17}/></button></div>
-      <div className="panel-counter"><AnimatedCounter value={visibleVehicles.length} aria-label={`${visibleVehicles.length} buses visibles`} className="panel-counter-value"/><span>buses de Metrobús<br/>en vía ahora mismo</span></div>
-      <div className="update-label"><span className="status-dot"/>{refreshing ? "Actualizando posiciones…" : `Actualizado ${formatTime(fleet.timestamp)}`}<span className="demo-label">{sourceLabel}</span></div>
+      <div className="panel-heading"><span className="eyebrow">{t("EL PULSO DE LA CDMX", "THE PULSE OF CDMX")}</span><button className="icon-button panel-close" aria-label={t("Cerrar panel", "Close panel")} onClick={onClose}><ChevronLeft size={17} /></button></div>
+      <div className="panel-counter"><AnimatedCounter value={visibleVehicles.length} aria-label={`${visibleVehicles.length} ${t("buses visibles", "visible buses")}`} className="panel-counter-value" /><span>{t("buses de Metrobús", "Metrobús buses")}<br />{t("en vía ahora mismo", "currently on route")}</span></div>
+      <div className="update-label"><span className="status-dot" />{refreshing ? t("Actualizando posiciones…", "Updating positions…") : `${t("Actualizado", "Updated")} ${formatTime(fleet.timestamp, locale)}`}<span className="demo-label">{sourceLabel}</span></div>
 
       <div className="search-wrapper">
-        <div className="dashboard-search"><Search size={17}/><input placeholder="Busca una línea o estación" aria-label="Busca una línea o estación" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && results[0]) chooseResult(results[0]); if (event.key === "Escape") closeSearch(); }}/>{query ? <button onClick={closeSearch} aria-label="Limpiar búsqueda"><X size={14}/></button> : <kbd>↵</kbd>}</div>
-        {query && <div className="search-results">{results.length ? results.map((result) => <button key={result.key} onClick={() => chooseResult(result)}><span className="line-badge" style={{ background: result.line.color }}>{result.line.code}</span><span>{result.station?.name ?? result.line.name}<small>{result.station ? "Estación" : `${result.line.from} → ${result.line.to}`}</small></span><ArrowUpRight size={14}/></button>) : <p>No encontramos «{query}». Prueba L1 o Buenavista.</p>}</div>}
+        <div className="dashboard-search"><Search size={17} /><input placeholder={t("Busca una línea o estación", "Search for a line or station")} aria-label={t("Busca una línea o estación", "Search for a line or station")} value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && results[0]) chooseResult(results[0]); if (event.key === "Escape") closeSearch(); }} />{query ? <button onClick={closeSearch} aria-label={t("Limpiar búsqueda", "Clear search")}><X size={14} /></button> : <kbd>↵</kbd>}</div>
+        {query && <div className="search-results">{results.length ? results.map((result) => <button key={result.key} onClick={() => chooseResult(result)}><span className="line-badge" style={{ background: result.line.color }}>{result.line.code}</span><span>{result.station?.name ?? result.line.name}<small>{result.station ? t("Estación", "Station") : `${result.line.from} → ${result.line.to}`}</small></span><ArrowUpRight size={14} /></button>) : <p>{t("No encontramos", "We couldn't find")} «{query}». {t("Prueba", "Try")} L1 {t("o", "or")} Buenavista.</p>}</div>}
       </div>
 
-      <div className="sidebar-section ranking-section"><div className="sidebar-section-title"><span>Más buses en vía</span><Activity size={14}/></div>{ranking.length ? ranking.map((line) => <button className="ranking-row" key={line.id} onClick={() => chooseLine(line)}><span className="line-badge" style={{ background: line.color }}>{line.code}</span><span className="ranking-name">{line.name}<span className="rank-track"><i style={{ width: `${line.count / (ranking[0]?.count || 1) * 100}%`, background: line.color }}/></span></span><span className="mono">{line.count}</span></button>) : <p className="empty-note">Selecciona una línea para ver sus unidades.</p>}</div>
+      <div className="sidebar-section ranking-section"><div className="sidebar-section-title"><span>{t("Más buses en vía", "Most buses on route")}</span><Activity size={14} /></div>{ranking.length ? ranking.map((line) => <button className="ranking-row" key={line.id} onClick={() => chooseLine(line)}><span className="line-badge" style={{ background: line.color }}>{line.code}</span><span className="ranking-name">{line.name}<span className="rank-track"><i style={{ width: `${line.count / (ranking[0]?.count || 1) * 100}%`, background: line.color }} /></span></span><span className="mono">{line.count}</span></button>) : <p className="empty-note">{t("Selecciona una línea para ver sus unidades.", "Select a line to see its units.")}</p>}</div>
 
-      <div className="sidebar-section filter-section"><div className="sidebar-section-title"><span>Líneas de la red</span><button onClick={toggleAllLines}>{allLinesSelected ? "Ocultar todas" : "Mostrar todas"}</button></div><div className="system-label"><BusFront size={13}/><span>Metrobús CDMX</span><span>{network.lines.length} líneas</span></div>
-        {network.lines.map((line) => <label className={`filter-line ${state.selectedLines.includes(line.id) ? "checked" : ""}`} key={line.id}><span className="line-badge" style={{ background: line.color }}>{line.code}</span><span className="filter-line-name">{line.name}</span><span className="filter-line-count">{lineCounts.get(line.id) ?? 0}</span><input type="checkbox" checked={state.selectedLines.includes(line.id)} onChange={() => toggleLine(line.id)}/><span className="custom-checkbox" aria-hidden="true">{state.selectedLines.includes(line.id) && <Check size={11}/>}</span></label>)}
-        <label className="service-select"><span>Tipo de unidad</span><select value={state.serviceFilter} onChange={(event) => setServiceFilter(event.target.value)} aria-label="Filtrar por tipo de unidad"><option value="all">Todas las unidades</option>{Object.entries(SERVICE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><ChevronDown size={12}/></label>
+      <div className="sidebar-section filter-section"><div className="sidebar-section-title"><span>{t("Líneas de la red", "Network lines")}</span><button onClick={toggleAllLines}>{allLinesSelected ? t("Ocultar todas", "Hide all") : t("Mostrar todas", "Show all")}</button></div><div className="system-label"><BusFront size={13} /><span>Metrobús CDMX</span><span>{network.lines.length} {t("líneas", "lines")}</span></div>
+        {network.lines.map((line) => <label className={`filter-line ${state.selectedLines.includes(line.id) ? "checked" : ""}`} key={line.id}><span className="line-badge" style={{ background: line.color }}>{line.code}</span><span className="filter-line-name">{line.name}</span><span className="filter-line-count">{lineCounts.get(line.id) ?? 0}</span><input type="checkbox" checked={state.selectedLines.includes(line.id)} onChange={() => toggleLine(line.id)} /><span className="custom-checkbox" aria-hidden="true">{state.selectedLines.includes(line.id) && <Check size={11} />}</span></label>)}
+        <label className="service-select"><span>{t("Tipo de unidad", "Unit type")}</span><select value={state.serviceFilter} onChange={(event) => setServiceFilter(event.target.value)} aria-label={t("Filtrar por tipo de unidad", "Filter by unit type")}><option value="all">{t("Todas las unidades", "All units")}</option>{Object.entries(SERVICE_LABELS).map(([value]) => <option key={value} value={value}>{serviceLabel(value as ServiceType, t)}</option>)}</select><ChevronDown size={12} /></label>
       </div>
 
-      <div className="sidebar-toggles"><button className={state.trails ? "active" : ""} onClick={state.toggleTrails} aria-pressed={state.trails}><Route size={17}/><span>Estelas</span><span className="toggle-switch"/></button><button className={state.showRoutes ? "active" : ""} onClick={state.toggleRoutes} aria-pressed={state.showRoutes}><Layers3 size={17}/><span>Recorridos</span><span className="toggle-switch"/></button><button className="record-button" onClick={() => { onToggleRecording(); onMobileClose(); }}><Video size={17}/><span>Modo grabación</span><kbd>R</kbd></button></div>
-      <button className="service-alert-button" onClick={onAlertsOpen}><Bell size={15}/><span>Alertas de servicio</span><span className="alert-count">1 demo</span><ChevronRight size={13}/></button>
+      <div className="sidebar-toggles"><button className={state.trails ? "active" : ""} onClick={state.toggleTrails} aria-pressed={state.trails}><Route size={17} /><span>{t("Estelas", "Trails")}</span><span className="toggle-switch" /></button><button className={state.showRoutes ? "active" : ""} onClick={state.toggleRoutes} aria-pressed={state.showRoutes}><Layers3 size={17} /><span>{t("Recorridos", "Routes")}</span><span className="toggle-switch" /></button><button className="record-button" onClick={() => { onToggleRecording(); onMobileClose(); }}><Video size={17} /><span>{t("Modo grabación", "Recording mode")}</span><kbd>R</kbd></button></div>
+      <button className="service-alert-button" onClick={onAlertsOpen}><Bell size={15} /><span>{t("Alertas de servicio", "Service alerts")}</span><span className="alert-count">1 {t("demo", "demo")}</span><ChevronRight size={13} /></button>
 
-      <div className="api-inspector"><button className="inspector-heading" onClick={() => setInspectorOpen((open) => !open)} aria-expanded={inspectorOpen}><Code2 size={13}/><span>Inspector de API</span><span className="mono">{calls}</span><ChevronDown size={12} style={{ transform: inspectorOpen ? "rotate(180deg)" : undefined }}/></button>{inspectorOpen && <div className="inspector-body"><p>{fleet.external_api_calls} llamadas externas · {calls} peticiones internas</p><code>GET /api/fleet · cada {fleet.refresh_seconds} s · fuente {fleet.source}</code>{traces.map((trace) => <div className="trace-row" key={trace.id}><span>{formatTime(trace.time)}</span><span className={trace.status === 200 ? "trace-ok" : "trace-fail"}>{trace.status}</span><span>{trace.duration} ms</span></div>)}<Link href="/docs">Adaptador y fuentes <ExternalLink size={11}/></Link></div>}</div>
-      <div className="sidebar-footer"><span className="status-dot"/><span>GTFS CDMX · posiciones {fleet.source === "gtfs-rt" ? "en vivo" : "simuladas"}</span><Link href="/docs" aria-label="Información sobre los datos"><HelpCircle size={13}/></Link></div>
-      <div className="mobile-user-controls"><span>{user.name ?? "Tu cuenta"}</span><Link href="/">Inicio <ArrowUpRight size={12}/></Link><button onClick={() => void signOut({ redirect: false }).then(() => window.location.assign("/login"))}>Salir <LogOut size={13}/></button></div>
+      <div className="api-inspector"><button className="inspector-heading" onClick={() => setInspectorOpen((open) => !open)} aria-expanded={inspectorOpen}><Code2 size={13} /><span>{t("Inspector de API", "API inspector")}</span><span className="mono">{calls}</span><ChevronDown size={12} style={{ transform: inspectorOpen ? "rotate(180deg)" : undefined }} /></button>{inspectorOpen && <div className="inspector-body"><p>{fleet.external_api_calls} {t("llamadas externas", "external calls")} · {calls} {t("peticiones internas", "internal requests")}</p><code>GET /api/fleet · {t("cada", "every")} {fleet.refresh_seconds} s · {t("fuente", "source")} {sourceLabel}</code>{traces.map((trace) => <div className="trace-row" key={trace.id}><span>{formatTime(trace.time, locale)}</span><span className={trace.status === 200 ? "trace-ok" : "trace-fail"}>{trace.status}</span><span>{trace.duration} ms</span></div>)}<Link href="/docs">{t("Adaptador y fuentes", "Adapter and sources")} <ExternalLink size={11} /></Link></div>}</div>
+      <div className="sidebar-footer"><span className="status-dot" /><span>GTFS CDMX · {t("posiciones", "positions")} {liveStatus}</span><Link href="/docs" aria-label={t("Información sobre los datos", "Information about the data")}><HelpCircle size={13} /></Link></div>
+      <div className="mobile-user-controls"><span>{accountLabel}</span><Link href="/">{t("Inicio", "Home")} <ArrowUpRight size={12} /></Link><button aria-label={t("Salir de la cuenta", "Sign out")} onClick={() => void signOut({ redirect: false }).then(() => window.location.assign("/"))}>{t("Salir", "Sign out")} <LogOut size={13} /></button></div>
     </div>
   );
 }

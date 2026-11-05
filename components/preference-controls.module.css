@@ -1,0 +1,27 @@
+.controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--foreground);
+}
+.controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 4px;
+  transition: background .18s;
+}
+.controls button:hover { background: var(--surface-2); }
+.language { font-size: 10px; font-weight: 600; letter-spacing: .3px; }
+@media (pointer: coarse) {
+  .controls button { min-height: 38px; width: 34px; }
+}

@@ -1,1 +1,5 @@
-export default function Loading() { return <div className="map-loading" role="status"><span className="loading-ring"/>Preparando tu ruta…</div>; }
+import { LoadingContent } from "@/components/public-documents";
+
+export default function Loading() {
+  return <LoadingContent />;
+}

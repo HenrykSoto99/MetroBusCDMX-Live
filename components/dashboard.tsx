@@ -8,18 +8,17 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Bell, Compass, Code2, Crosshair, HelpCircle, Layers3, Loader2, LogOut, Map as MapIcon, Menu, Minus, Plus, Route, X } from "lucide-react";
 import { Brand } from "./brand";
 import { BusPopup } from "./BusPopup";
+import { PreferenceControls } from "@/components/preference-controls";
 import { Sidebar } from "./Sidebar";
 import { useDashboard } from "@/stores/dashboard";
 import { useLiveBuses } from "@/lib/useLiveBuses";
+import { usePreferences, useTranslation } from "@/lib/preferences";
 import type { Coordinate, FleetSnapshot, Station, TransitNetwork } from "@/lib/transit-types";
 
-const LiveMap = dynamic(() => import("./LiveMap").then((module) => module.LiveMap), {
-  ssr: false,
-  loading: () => <div className="map-loading"><span className="loading-ring"/>Conectando con la ciudad…</div>,
-});
+type Translate = (es: string, en: string) => string;
 
-function formatTime(value: string) {
-  return new Date(value).toLocaleTimeString("es-MX", {
+function formatTime(value: string, locale: string) {
+  return new Date(value).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -27,6 +26,26 @@ function formatTime(value: string) {
     timeZone: "America/Mexico_City",
   });
 }
+
+function translateError(message: string, t: Translate) {
+  const messages: Record<string, [string, string]> = {
+    "No pudimos actualizar la simulación.": ["No pudimos actualizar la simulación.", "We couldn't update the simulation."],
+    "La respuesta de la red no es válida.": ["La respuesta de la red no es válida.", "The network response is not valid."],
+    "No hay conexión. Conservamos la última posición.": ["No hay conexión. Conservamos la última posición.", "There's no connection. We kept the last position."],
+  };
+  const translated = messages[message];
+  return translated ? t(...translated) : t("No pudimos actualizar los datos. Conservamos la última posición; intenta de nuevo.", "We couldn't update the data. We kept the last position; please try again.");
+}
+
+function MapLoading() {
+  const { t } = useTranslation();
+  return <div className="map-loading"><span className="loading-ring" />{t("Conectando con la ciudad…", "Connecting to the city…")}</div>;
+}
+
+const LiveMap = dynamic(() => import("./LiveMap").then((module) => module.LiveMap), {
+  ssr: false,
+  loading: () => <MapLoading />,
+});
 
 interface DashboardProps {
   network: TransitNetwork;
@@ -37,6 +56,8 @@ interface DashboardProps {
 export function Dashboard({ network, initialFleet, user }: DashboardProps) {
   const state = useDashboard();
   const { fleet, refreshing, error, traces, calls, refresh } = useLiveBuses(initialFleet);
+  const { locale, t } = useTranslation();
+  const theme = usePreferences((preferences) => preferences.theme);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
@@ -45,6 +66,8 @@ export function Dashboard({ network, initialFleet, user }: DashboardProps) {
   const [command, setCommand] = useState<{ type: "zoom-in" | "zoom-out" | "reset" | "pitch"; nonce: number } | null>(null);
   const [selectedStation, setSelectedStation] = useState<{ station: Station; lineId: number } | null>(null);
   const [clock, setClock] = useState(initialFleet.timestamp);
+
+  const accountName = user.name ?? user.email ?? t("usuario", "user");
 
   const openPanel = () => {
     setSidebarOpen(true);
@@ -133,29 +156,42 @@ export function Dashboard({ network, initialFleet, user }: DashboardProps) {
   return <main className={`dashboard ${state.recording ? "is-recording" : ""} ${sidebarOpen ? "sidebar-visible" : "sidebar-collapsed"}`}>
     {!state.recording && <>
       <aside className="app-rail">
-        <Brand compact/>
-        <div className="rail-main"><button className="rail-button active" aria-label="Mostrar mapa" onClick={() => setSidebarOpen(!sidebarOpen)}><MapIcon size={20}/></button><button className="rail-button" aria-label="Ver filtros de líneas" onClick={openPanel}><Route size={20}/></button><button className={`rail-button ${alertsOpen ? "active" : ""}`} aria-label="Alertas de servicio" onClick={() => setAlertsOpen(!alertsOpen)}><Bell size={20}/><i/></button></div>
-        <div className="rail-bottom"><button className="rail-button" onClick={() => setHelpOpen(true)} aria-label="Ayuda de los controles"><HelpCircle size={20}/></button><Link className="rail-button" href="/docs" aria-label="Documentación"><Code2 size={20}/></Link><div className="rail-divider"/><button className="user-avatar" aria-label={`Cerrar sesión de ${user.name ?? user.email ?? "usuario"}`} title="Cerrar sesión" onClick={() => void signOut({ redirect: false }).then(() => window.location.assign("/login"))}>{(user.name ?? user.email ?? "M").charAt(0).toUpperCase()}<LogOut size={12}/></button></div>
+        <Brand compact />
+        <div className="rail-main">
+          <button className="rail-button active" aria-label={t("Mostrar mapa", "Show map")} onClick={() => setSidebarOpen(!sidebarOpen)}><MapIcon size={20} /></button>
+          <button className="rail-button" aria-label={t("Ver filtros de líneas", "View line filters")} onClick={openPanel}><Route size={20} /></button>
+          <button className={`rail-button ${alertsOpen ? "active" : ""}`} aria-label={t("Alertas de servicio", "Service alerts")} onClick={() => setAlertsOpen(!alertsOpen)}><Bell size={20} /><i /></button>
+        </div>
+        <div className="rail-bottom">
+          <button className="rail-button" onClick={() => setHelpOpen(true)} aria-label={t("Ayuda de los controles", "Controls help")}><HelpCircle size={20} /></button>
+          <Link className="rail-button" href="/docs" aria-label={t("Documentación", "Documentation")}><Code2 size={20} /></Link>
+          <div className="rail-divider" />
+          <button className="user-avatar" aria-label={t(`Cerrar sesión de ${accountName}`, `Sign out ${accountName}`)} title={t("Cerrar sesión y volver al inicio", "Sign out and return home")} onClick={() => void signOut({ redirect: false }).then(() => window.location.assign("/"))}>{accountName.charAt(0).toUpperCase()}<LogOut size={12} /></button>
+        </div>
       </aside>
-      {sidebarOpen && <aside className="dashboard-sidebar" aria-label="Panel de Metrobús"><Sidebar {...sidebarProps}/></aside>}
+      {sidebarOpen && <aside className="dashboard-sidebar" aria-label={t("Panel de Metrobús", "Metrobús panel")}><Sidebar {...sidebarProps} /></aside>}
     </>}
 
-    <section className="dashboard-map-area" aria-label="Mapa interactivo de Metrobús CDMX">
-      <LiveMap network={network} vehicles={fleet.vehicles} selectedLines={state.selectedLines} serviceFilter={state.serviceFilter} showRoutes={state.showRoutes} trails={state.trails} recording={state.recording} selectedId={state.selectedId} following={state.following} focus={focus} command={command} onVehicleSelect={(id) => { state.selectVehicle(id); setSelectedStation(null); }} onStationSelect={(station, lineId) => { setSelectedStation({ station, lineId }); state.selectVehicle(null); }}/>
+    <section className="dashboard-map-area" aria-label={t("Mapa interactivo de Metrobús CDMX", "Interactive Metrobús CDMX map")}>
+      <LiveMap network={network} vehicles={fleet.vehicles} selectedLines={state.selectedLines} serviceFilter={state.serviceFilter} showRoutes={state.showRoutes} trails={state.trails} recording={state.recording} selectedId={state.selectedId} following={state.following} focus={focus} command={command} onVehicleSelect={(id) => { state.selectVehicle(id); setSelectedStation(null); }} onStationSelect={(station, lineId) => { setSelectedStation({ station, lineId }); state.selectVehicle(null); }} />
       {!state.recording && <>
-        <div className="map-header"><button className="map-panel-button icon-button" onClick={openPanel} aria-label="Abrir panel de líneas"><Menu size={18}/></button><div className="map-heading"><span className="map-heading-title">Ciudad de México <ArrowUpRight size={12}/></span><span>METROBÚS / VISTA DE RED</span></div><div className="map-header-right"><span className="map-demo"><span className="status-dot"/> SIMULACIÓN</span><span className="map-clock mono">{formatTime(clock)} <small>CDMX</small></span></div></div>
-        <div className="map-controls"><button aria-label="Acercar mapa" onClick={() => runCommand("zoom-in")}><Plus size={19}/></button><button aria-label="Alejar mapa" onClick={() => runCommand("zoom-out")}><Minus size={19}/></button><span/><button aria-label="Centrar toda la red" onClick={() => runCommand("reset")}><Crosshair size={18}/></button><button aria-label="Alternar perspectiva 3D" onClick={() => runCommand("pitch")}><Compass size={19}/></button></div>
-        <div className="map-bottom-status"><span className="status-dot"/><span>{visibleVehicles.length} unidades visibles</span><i/><span>{state.selectedLines.length} / {network.lines.length} líneas</span><span className="desktop-only">CARTO DARK MATTER</span></div>
-        {error && <div className="connection-error" role="alert"><span>{error}</span><button onClick={() => void refresh()} disabled={refreshing}>{refreshing ? <Loader2 size={15} className="spin"/> : "Reintentar"}</button></div>}
-        {!visibleVehicles.length && <div className="map-empty-state"><Layers3 size={28}/><h3>No hay unidades visibles</h3><p>Activa una línea o restablece el tipo de unidad.</p><button className="primary-button" onClick={resetFilters}>Mostrar toda la red</button></div>}
-        {selectedVehicle && selectedVehicleLine && <BusPopup vehicle={selectedVehicle} line={selectedVehicleLine} network={network} following={state.following} onToggleFollow={state.toggleFollow} onClose={() => state.selectVehicle(null)}/>}
-        {selectedStation && stationLine && <BusPopup station={selectedStation.station} line={stationLine} network={network} vehicles={visibleVehicles} onClose={() => setSelectedStation(null)}/>}
+        <div className="map-header">
+          <button className="map-panel-button icon-button" onClick={openPanel} aria-label={t("Abrir panel de líneas", "Open line panel")}><Menu size={18} /></button>
+          <div className="map-heading"><span className="map-heading-title"><img src="/brand/app-logo.png" width={20} height={20} alt="" aria-hidden="true" />{t("Ciudad de México", "Mexico City")}</span><span>{t("METROBÚS / VISTA DE RED", "METROBÚS / NETWORK VIEW")}</span></div>
+          <div className="map-header-right"><span className="map-demo"><span className="status-dot" /> {t("SIMULACIÓN", "SIMULATION")}</span><span className="map-clock mono">{formatTime(clock, locale)} <small>CDMX</small></span><PreferenceControls /></div>
+        </div>
+        <div className="map-controls"><button aria-label={t("Acercar mapa", "Zoom in")} onClick={() => runCommand("zoom-in")}><Plus size={19} /></button><button aria-label={t("Alejar mapa", "Zoom out")} onClick={() => runCommand("zoom-out")}><Minus size={19} /></button><span /><button aria-label={t("Centrar toda la red", "Center the full network")} onClick={() => runCommand("reset")}><Crosshair size={18} /></button><button aria-label={t("Alternar perspectiva 3D", "Toggle 3D perspective")} onClick={() => runCommand("pitch")}><Compass size={19} /></button></div>
+        <div className="map-bottom-status"><span className="status-dot" /><span>{visibleVehicles.length} {t("unidades visibles", "visible units")}</span><i /><span>{state.selectedLines.length} / {network.lines.length} {t("líneas", "lines")}</span><span className="desktop-only">{theme === "light" ? "CARTO POSITRON" : "CARTO DARK MATTER"}</span></div>
+        {error && <div className="connection-error" role="alert"><span>{translateError(error, t)}</span><button onClick={() => void refresh()} disabled={refreshing}>{refreshing ? <Loader2 size={15} className="spin" /> : t("Reintentar", "Retry")}</button></div>}
+        {!visibleVehicles.length && <div className="map-empty-state"><Layers3 size={28} /><h3>{t("No hay unidades visibles", "No visible units")}</h3><p>{t("Activa una línea o restablece el tipo de unidad.", "Activate a line or reset the unit type.")}</p><button className="primary-button" onClick={resetFilters}>{t("Mostrar toda la red", "Show the full network")}</button></div>}
+        {selectedVehicle && selectedVehicleLine && <BusPopup vehicle={selectedVehicle} line={selectedVehicleLine} network={network} following={state.following} onToggleFollow={state.toggleFollow} onClose={() => state.selectVehicle(null)} />}
+        {selectedStation && stationLine && <BusPopup station={selectedStation.station} line={stationLine} network={network} vehicles={visibleVehicles} onClose={() => setSelectedStation(null)} />}
       </>}
-      {state.recording && <><div className="recording-counter"><Brand/><span className="recording-eyebrow"><span className="record-dot"/> MODO GRABACIÓN · DEMO</span><strong>{visibleVehicles.length}</strong><span>buses en vía ahora mismo</span></div><button className="exit-recording" onClick={state.toggleRecording}><X size={17}/> Salir del modo grabación <kbd>Esc</kbd></button><span className="recording-note">Vista cinematográfica · posiciones simuladas · usa tu capturador de pantalla</span></>}
+      {state.recording && <><div className="recording-counter"><Brand variant="app" /><span className="recording-eyebrow"><span className="record-dot" /> {t("MODO GRABACIÓN · DEMO", "RECORDING MODE · DEMO")}</span><strong>{visibleVehicles.length}</strong><span>{t("buses en vía ahora mismo", "buses currently on route")}</span></div><button className="exit-recording" onClick={state.toggleRecording}><X size={17} /> {t("Salir del modo grabación", "Exit recording mode")} <kbd>Esc</kbd></button><span className="recording-note">{t("Vista cinematográfica · posiciones simuladas · usa tu capturador de pantalla", "Cinematic view · simulated positions · use your screen recorder")}</span></>}
     </section>
 
-    <Dialog.Root open={mobileOpen && !state.recording} onOpenChange={setMobileOpen}><Dialog.Portal><Dialog.Overlay className="drawer-overlay"/><Dialog.Content className="mobile-panel"><Dialog.Title className="sr-only">Panel de líneas y filtros</Dialog.Title><Dialog.Description className="sr-only">Busca estaciones y selecciona las líneas de Metrobús visibles.</Dialog.Description><Dialog.Close className="mobile-panel-close icon-button" aria-label="Cerrar panel"><X size={18}/></Dialog.Close><Sidebar {...sidebarProps}/></Dialog.Content></Dialog.Portal></Dialog.Root>
-    <Dialog.Root open={alertsOpen} onOpenChange={setAlertsOpen}><Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="info-dialog"><Dialog.Title>Alertas de servicio <Bell size={20}/></Dialog.Title><Dialog.Description>Ejemplos de alertas para la versión de demostración.</Dialog.Description><div className="service-alert"><span className="line-badge" style={{ background: "#D40D0D" }}>L1</span><div><span className="demo-label">EJEMPLO SIMULADO</span><h3>Mayor afluencia en Insurgentes</h3><p>Una alerta real aparecerá aquí cuando se conecte una fuente oficial. Este mensaje no describe una incidencia actual.</p></div></div><Link className="text-link" target="_blank" href="https://www.metrobus.cdmx.gob.mx/">Consulta los avisos oficiales <ArrowUpRight size={15}/></Link><Dialog.Close className="dialog-close icon-button" aria-label="Cerrar alertas"><X size={18}/></Dialog.Close></Dialog.Content></Dialog.Portal></Dialog.Root>
-    <Dialog.Root open={helpOpen} onOpenChange={setHelpOpen}><Dialog.Portal><Dialog.Overlay className="dialog-overlay"/><Dialog.Content className="info-dialog"><Dialog.Title>Explora a tu ritmo <Compass size={21}/></Dialog.Title><Dialog.Description>El mapa es interactivo y los filtros son reversibles.</Dialog.Description><div className="help-content"><p><strong>Busca</strong> una línea o estación y presiona Enter para enfocarla.</p><p><strong>Selecciona</strong> una unidad para ver su información y seguirla.</p><p><strong>Activa estelas</strong> para ver las seis últimas posiciones reportadas.</p><p><kbd>R</kbd> abre el modo grabación. <kbd>Esc</kbd> vuelve al mapa normal. Este modo no genera un archivo de video.</p><p>Rutas GTFS reales. Posiciones, velocidades y alertas simuladas.</p></div><Dialog.Close className="dialog-close icon-button" aria-label="Cerrar ayuda"><X size={18}/></Dialog.Close></Dialog.Content></Dialog.Portal></Dialog.Root>
+    <Dialog.Root open={mobileOpen && !state.recording} onOpenChange={setMobileOpen}><Dialog.Portal><Dialog.Overlay className="drawer-overlay" /><Dialog.Content className="mobile-panel"><Dialog.Title className="sr-only">{t("Panel de líneas y filtros", "Line and filter panel")}</Dialog.Title><Dialog.Description className="sr-only">{t("Busca estaciones y selecciona las líneas de Metrobús visibles.", "Search stations and select visible Metrobús lines.")}</Dialog.Description><Dialog.Close className="mobile-panel-close icon-button" aria-label={t("Cerrar panel", "Close panel")}><X size={18} /></Dialog.Close><Sidebar {...sidebarProps} /></Dialog.Content></Dialog.Portal></Dialog.Root>
+    <Dialog.Root open={alertsOpen} onOpenChange={setAlertsOpen}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="info-dialog"><Dialog.Title>{t("Alertas de servicio", "Service alerts")} <Bell size={20} /></Dialog.Title><Dialog.Description>{t("Ejemplos de alertas para la versión de demostración.", "Example alerts for the demo version.")}</Dialog.Description><div className="service-alert"><span className="line-badge" style={{ background: "#D40D0D" }}>L1</span><div><span className="demo-label">{t("EJEMPLO SIMULADO", "SIMULATED EXAMPLE")}</span><h3>{t("Mayor afluencia en Insurgentes", "Higher crowding at Insurgentes")}</h3><p>{t("Una alerta real aparecerá aquí cuando se conecte una fuente oficial. Este mensaje no describe una incidencia actual.", "A real alert will appear here when an official source is connected. This message does not describe a current incident.")}</p></div></div><Link className="text-link" target="_blank" href="https://www.metrobus.cdmx.gob.mx/">{t("Consulta los avisos oficiales", "View official notices")} <ArrowUpRight size={15} /></Link><Dialog.Close className="dialog-close icon-button" aria-label={t("Cerrar alertas", "Close alerts")}><X size={18} /></Dialog.Close></Dialog.Content></Dialog.Portal></Dialog.Root>
+    <Dialog.Root open={helpOpen} onOpenChange={setHelpOpen}><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="info-dialog"><Dialog.Title>{t("Explora a tu ritmo", "Explore at your own pace")} <Compass size={21} /></Dialog.Title><Dialog.Description>{t("El mapa es interactivo y los filtros son reversibles.", "The map is interactive and filters can be reversed.")}</Dialog.Description><div className="help-content"><p><strong>{t("Busca", "Search")}</strong> {t("una línea o estación y presiona Enter para enfocarla.", "for a line or station and press Enter to focus it.")}</p><p><strong>{t("Selecciona", "Select")}</strong> {t("una unidad para ver su información y seguirla.", "a unit to view its information and follow it.")}</p><p><strong>{t("Activa estelas", "Enable trails")}</strong> {t("para ver las seis últimas posiciones reportadas.", "to see the six latest reported positions.")}</p><p><kbd>R</kbd> {t("abre el modo grabación.", "opens recording mode.")} <kbd>Esc</kbd> {t("vuelve al mapa normal. Este modo no genera un archivo de video.", "returns to the regular map. This mode does not create a video file.")}</p><p>{t("Rutas GTFS reales. Posiciones, velocidades y alertas simuladas.", "Real GTFS routes. Simulated positions, speeds, and alerts.")}</p></div><Dialog.Close className="dialog-close icon-button" aria-label={t("Cerrar ayuda", "Close help")}><X size={18} /></Dialog.Close></Dialog.Content></Dialog.Portal></Dialog.Root>
   </main>;
 }

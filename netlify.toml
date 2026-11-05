@@ -1,0 +1,12 @@
+[build]
+  command = "pnpm build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PNPM_FLAGS = "--shamefully-hoist --frozen-lockfile"
+
+# Netlify detects Next.js and installs the current OpenNext adapter automatically.
+# Do not add a SPA redirect to /index.html or set output: "export".
+# Set DATABASE_URL, NEXTAUTH_SECRET and NEXTAUTH_URL in the Netlify UI/API,
+# not here. Server variables need Functions (and Builds) scope.

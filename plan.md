@@ -41,3 +41,23 @@ El adjunto adicional pasted_content_2.txt pasa a ser el requisito activo de rend
 La nueva solicitud de 80–120 unidades reemplaza el conteo anterior de 568/450–650: se usará una simulación coherente de 100 vehículos tanto en hero como en dashboard, marcada explícitamente como demo. Se crearán components/LiveMap.tsx, lib/metrobus-mock.ts y lib/useLiveBuses.ts. El estado de snapshots/peticiones pasará a un store Zustand no persistido; las preferencias de filtros siguen separadas y persistidas. Sidebar y BusPopup se separarán del dashboard. La integración Builder se documentará y dejará preparada como sección comentada con fetchMap y alternativa iframe de URL publicada/token de alcance mínimo. No se inventa una URL privada ni se accede al workspace sin autorización.
 
 Las posiciones se interpolan cada12s; las estelas TripsLayer conservan tiempos y seis snapshots por unidad. El contador de llamadas se mantiene honesto: peticiones internas reales a la fuente simulada, señaladas como demo; llamadas externas reales cero. Se prioriza render GPU sin recrear el mapa cada refresh. Hay fallback no-interleaved cuando se necesite y vistaSVG honesta si fallaWebGL, sin sacrificar protección de sesión ni las rutas públicas.
+
+## GitHub y revisión Netlify — 4 noviembre 2026
+
+La petición actual conecta el repositorio privado `HenrykSoto99/MetroBusCDMX-Live` mediante el flujo administrado y revisa la compatibilidad con Netlify. No autoriza publicar ni crear un sitio. El cambio de proveedor Git fue confirmado y completado; se preserva main y su historia.
+
+Se prepara `netlify.toml` para OpenNext, build `pnpm build`, publish `.next`, Node22 y flags pnpm de hoisting/frozen-lockfile. Next.js conserva standalone para el contenedor Manus, pero lo omite cuando NETLIFY=true. Auth y las rutas privadas siguen Node; no se convierte en export estático ni se añade fallback SPA. Se documentará MySQL externo accesible por TLS, migración separada y secretos de Functions/Builds. Las credenciales y la base administradas no se copian a Netlify. La revisión distingue build local, empaquetado Netlify y deploy real no ejecutado.
+
+## Ajuste de estaciones — 4 noviembre 2026
+
+El usuario pide identificar estaciones con un icono MB más grande y desplegar nombre/datos al hover o click, con pictograma individual cuando esté disponible. Se reemplaza el pequeño punto deestación por IconLayerGPU con atlasMBlocal, tamaños adaptados alzoom y halo delcolor de línea. BusPopup preserva estimacionesdemo y añade identidad, línea,ID/coordenadasGTFS. Los campos pictogramUrl/pictogramSourceUrl son opcionales y solo se completan con activos verificables; no se fabrican logosoficiales. La interacción táctil usa el mismo picking de MapLibre que elclick. Se conserva layoutmobile y fallback.
+
+El cierre de sesión en escritorio y móvil debe esperar `signOut({redirect:false})` y navegar a `/`. No se cambia el destino de accesos no autenticados ni la protección del dashboard.
+
+## Idioma y tema — 4 noviembre 2026
+
+Nueva petición: agregar inglés/español y light/darkmode. Se creará un storeZustand de preferencias no sensibles, persistido solo en localStorage, con ES/dark predeterminados y controles visibles en landing,auth,documentos y dashboard. El proveedor raíz aplicará lang y data-theme; la traducción usa textos ES/EN explícitos sin traducir nombresoficiales de estaciones o datosGTFS. El tema claro usa superficies claras/contrasteoscuro, paleta roja preservada, y mapaCARTOPositron; el oscuro conserva DarkMatter. Los controles tienen aria-label y títulos localizados. Estado deauth no se altera; las preferencias persisten al salir yvolver.
+
+## Logos adjuntos — 4 noviembre 2026
+
+El usuario proporciona dos PNG y pide sustituir el logo de la landing por la primera imagen y utilizar la segunda en APP/dondeconvenga. Se conservarán originales en el proyecto y se prepararán copias de tamaño apropiado sin redibujar/recolorear. Si hay padding transparente, se recorta solo ese espacio vacío. Brand distingue landing/app; el segundo identifica el rail/app y favicon. Los pictogramas de estación siguen MB. El logo/plataforma también puede actualizarse con la identidad deapp mediante URLduradera.

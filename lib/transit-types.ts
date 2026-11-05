@@ -1,6 +1,10 @@
 export type Coordinate = [number, number];
 export type ServiceType = "articulado" | "biarticulado" | "doble-piso" | "convencional";
-export interface Station { id: string; name: string; coordinates: Coordinate }
+export interface Station {
+  id: string; name: string; coordinates: Coordinate;
+  pictogramUrl?: string;
+  pictogramSourceUrl?: string;
+}
 export interface TransitLine {
   id: number; code: string; name: string; color: string; from: string; to: string;
   routeId: string; coordinates: Coordinate[]; stations: Station[];

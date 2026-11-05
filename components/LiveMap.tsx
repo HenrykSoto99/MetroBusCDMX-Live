@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PickingInfo } from "@deck.gl/core";
 import { BASEMAP, fetchMap } from "@deck.gl/carto";
 import { TripsLayer } from "@deck.gl/geo-layers";
-import { PathLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { IconLayer, PathLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import type { Coordinate, Station, TransitNetwork, Vehicle } from "@/lib/transit-types";
+import { usePreferences, useTranslation } from "@/lib/preferences";
 import NetworkFallback from "@/components/network-fallback";
 
 const CARTO_DARK_MATTER_STYLE = BASEMAP.DARK_MATTER;
@@ -19,6 +20,7 @@ const TRAIL_SNAPSHOT_COUNT = 6;
 const FRAME_INTERVAL_MS = 1000 / 60;
 const MAP_LOAD_TIMEOUT_MS = 10_000;
 const DEFAULT_CENTER: Coordinate = [-99.145, 19.426];
+const STATION_ICON_MAPPING = { mb: { x: 0, y: 0, width: 128, height: 128, mask: false } };
 
 // CARTO Builder integration belongs in the main integration layer in a future pass:
 // fetchMap({cartoMapId: "<published-map-id>"}) requires a published map and scoped credentials.
@@ -200,14 +202,15 @@ function stationFromPick(network: TransitNetwork, point: StationPoint) {
   return station ? { station, lineId: point.lineId } : null;
 }
 
-function formatVehicleTooltip(point: VehiclePoint) {
+function formatVehicleTooltip(point: VehiclePoint, language: "es" | "en") {
   const bearing = Number.isFinite(point.bearing) ? `${Math.round(point.bearing as number)}°` : "—";
   const speed = Number.isFinite(point.speed) ? `${Math.round(point.speed as number)} km/h` : "—";
+  if (language === "en") return `${point.lineCode} · ${point.lineName}\n${point.id}\nToward: ${point.direction || "—"}\nBearing: ${bearing} · Speed: ${speed}\nNext station: ${point.nextStop || "—"}`;
   return `${point.lineCode} · ${point.lineName}\n${point.id}\nSentido: ${point.direction || "—"}\nRumbo: ${bearing} · Velocidad: ${speed}\nPróxima estación: ${point.nextStop || "—"}`;
 }
 
 function formatStationTooltip(point: StationPoint) {
-  return `${point.lineCode} · ${point.lineName}\nEstación: ${point.station.name}`;
+  return `${point.station.name}\n${point.lineCode} · ${point.lineName}\nID: ${point.station.id}\n${point.station.coordinates[1].toFixed(5)}, ${point.station.coordinates[0].toFixed(5)}`;
 }
 
 export function LiveMap({
@@ -226,8 +229,18 @@ export function LiveMap({
   onVehicleSelect,
   onStationSelect,
   onMapReady,
-  retryLabel = "Reintentar mapa",
+  retryLabel,
 }: LiveMapProps) {
+  const { theme } = usePreferences();
+  const { language, t } = useTranslation();
+  const preferencesRef = useRef({ theme, language });
+  preferencesRef.current = { theme, language };
+  const styleUrl = theme === "light"
+    ? process.env.NEXT_PUBLIC_LIGHT_MAP_STYLE_URL || BASEMAP.POSITRON
+    : process.env.NEXT_PUBLIC_MAP_STYLE_URL || CARTO_DARK_MATTER_STYLE;
+  const styleRef = useRef(styleUrl);
+  styleRef.current = styleUrl;
+  const appliedStyleRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const overlayRef = useRef<OverlayLike | null>(null);
@@ -368,6 +381,7 @@ export function LiveMap({
     const currentTime = tripOriginMsRef.current === null ? 0 : (now - tripOriginMsRef.current) / 1000;
     const routeData = staticDataRef.current.routes;
     const stationData = staticDataRef.current.stations;
+    const stationIconSize = currentProps.variant === "hero" ? 15 : Math.max(20, Math.min(36, 20 + (map.getZoom() - 11) * 4));
     const layers = [
       new PathLayer<RoutePoint>({
         id: "metrobus-route-glow",
@@ -413,19 +427,31 @@ export function LiveMap({
         pickable: false,
       }),
       new ScatterplotLayer<StationPoint>({
-        id: "metrobus-stations",
+        id: "metrobus-station-halo",
         data: stationData,
-        pickable: true,
+        pickable: false,
         radiusUnits: "pixels",
-        radiusMinPixels: 3,
-        radiusMaxPixels: 5,
         getPosition: (station) => station.position,
-        getRadius: 3,
-        getFillColor: [248, 250, 252, 235],
+        getRadius: stationIconSize * 0.58,
+        getFillColor: theme === "light" ? [255, 255, 255, 230] : [10, 12, 14, 230],
         getLineColor: (station) => colorToRgba(station.color, 255),
-        getLineWidth: 1.3,
+        lineWidthUnits: "pixels",
+        getLineWidth: 2,
         stroked: true,
         filled: true,
+      }),
+      new IconLayer<StationPoint>({
+        id: "metrobus-stations",
+        data: stationData,
+        iconAtlas: "/brand/station-mb.png",
+        iconMapping: STATION_ICON_MAPPING,
+        getIcon: () => "mb",
+        getPosition: (station) => station.position,
+        getSize: stationIconSize,
+        sizeUnits: "pixels",
+        billboard: true,
+        pickable: true,
+        alphaCutoff: 0.12,
         onHover: (info) => handleHover(info as GeoPickInfo<StationPoint>, "station"),
       }),
       new ScatterplotLayer<VehiclePoint>({
@@ -450,7 +476,7 @@ export function LiveMap({
         getPosition: (vehicle) => vehicle.position,
         getRadius: (vehicle) => vehicle.id === currentProps.selectedId ? 6 : 4.2,
         getFillColor: (vehicle) => colorToRgba(vehicle.color, 255),
-        getLineColor: [255, 255, 255, 255],
+        getLineColor: theme === "light" ? [40, 42, 44, 255] : [255, 255, 255, 255],
         getLineWidth: (vehicle) => vehicle.id === currentProps.selectedId ? 2.5 : 1.2,
         stroked: true,
         filled: true,
@@ -480,13 +506,30 @@ export function LiveMap({
     }
   };
 
-  function setTooltip(text: string, x: number, y: number) {
+  function setTooltip(text: string, x: number, y: number, station?: Station) {
     const tooltip = tooltipRef.current;
     if (!tooltip) return;
-    tooltip.textContent = text;
-    tooltip.style.left = `${x + 14}px`;
-    tooltip.style.top = `${y + 14}px`;
+    tooltip.replaceChildren();
+    tooltip.dataset.kind = station ? "station" : "vehicle";
+    if (station) {
+      const symbol = document.createElement("img");
+      symbol.src = station.pictogramUrl || "/brand/station-mb.svg";
+      symbol.alt = station.pictogramUrl ? `Pictograma de ${station.name}` : "MB — estación de Metrobús";
+      symbol.className = "station-tooltip-symbol";
+      symbol.onerror = () => { symbol.onerror = null; symbol.src = "/brand/station-mb.svg"; symbol.alt = "MB — estación de Metrobús"; };
+      tooltip.append(symbol);
+    }
+    const content = document.createElement("span");
+    content.textContent = text;
+    tooltip.append(content);
     tooltip.hidden = false;
+    const bounds = tooltip.getBoundingClientRect();
+    const width = containerRef.current?.clientWidth ?? 320;
+    const height = containerRef.current?.clientHeight ?? 600;
+    const left = x + 14 + bounds.width > width - 8 ? x - bounds.width - 14 : x + 14;
+    const top = y + 14 + bounds.height > height - 8 ? y - bounds.height - 14 : y + 14;
+    tooltip.style.left = `${Math.max(8, left)}px`;
+    tooltip.style.top = `${Math.max(8, top)}px`;
   }
 
   function handleHover(info: GeoPickInfo<VehiclePoint | StationPoint>, kind: "vehicle" | "station") {
@@ -495,8 +538,8 @@ export function LiveMap({
       if (tooltip) tooltip.hidden = true;
       return;
     }
-    const text = kind === "vehicle" ? formatVehicleTooltip(info.object as VehiclePoint) : formatStationTooltip(info.object as StationPoint);
-    setTooltip(text, info.x, info.y);
+    const text = kind === "vehicle" ? formatVehicleTooltip(info.object as VehiclePoint, preferencesRef.current.language) : formatStationTooltip(info.object as StationPoint);
+    setTooltip(text, info.x, info.y, kind === "station" ? (info.object as StationPoint).station : undefined);
   }
 
   function handleClick(info: GeoPickInfo<VehiclePoint | StationPoint>, kind: "vehicle" | "station") {
@@ -546,7 +589,7 @@ export function LiveMap({
         const currentProps = propsRef.current;
         map = new maplibregl.Map({
           container,
-          style: process.env.NEXT_PUBLIC_MAP_STYLE_URL || CARTO_DARK_MATTER_STYLE,
+          style: styleRef.current,
           center: currentProps.variant === "hero" ? HERO_CENTER : DEFAULT_CENTER,
           zoom: currentProps.variant === "hero" ? 11.3 : 10.9,
           pitch: currentProps.variant === "hero" ? 42 : 0,
@@ -554,6 +597,7 @@ export function LiveMap({
           attributionControl: false,
           cooperativeGestures: currentProps.variant === "hero",
         });
+        appliedStyleRef.current = styleRef.current;
         mapRef.current = map;
         canvas = map.getCanvas();
         resizeObserver = new ResizeObserver(() => {
@@ -578,7 +622,7 @@ export function LiveMap({
           loaded = true;
           if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
           try {
-            const createOverlay = (interleaved: boolean) => new MapLibreOverlay({ interleaved, layers: [] });
+            const createOverlay = (interleaved: boolean) => new MapLibreOverlay({ interleaved, layers: [], getCursor: ({ isHovering }) => isHovering ? "pointer" : "grab" });
             let overlay: OverlayLike;
             let interleavedOverlay: OverlayLike | null = null;
             try {
@@ -642,6 +686,25 @@ export function LiveMap({
       map?.remove();
     };
   }, [retryNonce]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (mapStatus !== "ready" || !map || appliedStyleRef.current === styleUrl) return;
+    appliedStyleRef.current = styleUrl;
+    const redraw = () => renderGPURef.current(performance.now());
+    map.once("style.load", redraw);
+    map.setStyle(styleUrl);
+    if (tooltipRef.current) tooltipRef.current.hidden = true;
+    return () => { map.off("style.load", redraw); };
+  }, [mapStatus, styleUrl]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (mapStatus !== "ready" || !map) return;
+    const redraw = () => renderGPURef.current(performance.now());
+    map.on("move", redraw);
+    return () => { map.off("move", redraw); };
+  }, [mapStatus]);
 
   useEffect(() => {
     if (mapStatus !== "ready") return;
@@ -736,7 +799,7 @@ export function LiveMap({
   };
 
   return (
-    <div ref={containerRef} className="transit-map maplibregl-map absolute inset-0 overflow-hidden" data-map-status={mapStatus} data-overlay-mode={overlayMode}>
+    <div ref={containerRef} className="transit-map maplibregl-map absolute inset-0 overflow-hidden" data-map-status={mapStatus} data-overlay-mode={overlayMode} data-map-theme={theme}>
       {mapStatus === "fallback" ? (
         <NetworkFallback
           network={network}
@@ -747,14 +810,14 @@ export function LiveMap({
           onVehicleSelect={onVehicleSelect}
           onStationSelect={onStationSelect}
           onRetry={handleRetry}
-          retryLabel={retryLabel}
+          retryLabel={retryLabel || t("Reintentar mapa", "Retry map")}
         />
       ) : (
         <>
           <div className="absolute inset-0" />
-          <div ref={tooltipRef} className="map-tooltip pointer-events-none absolute z-20 max-w-[260px] whitespace-pre-line rounded-md border border-white/15 bg-[#101822]/95 px-3 py-2 text-[11px] leading-5 text-white shadow-xl backdrop-blur-sm" hidden />
-          <div className="pointer-events-none absolute bottom-2 right-2 z-10 rounded bg-[#101822]/75 px-2 py-1 text-[10px] tracking-wide text-white/60">© CARTO · © OpenStreetMap</div>
-          {mapStatus === "loading" ? <div className="map-loading pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-white/70">Cargando red…</div> : null}
+          <div ref={tooltipRef} className="map-tooltip pointer-events-none absolute z-20 max-w-[280px] whitespace-pre-line rounded-md border border-white/15 bg-[#101822]/95 px-3 py-2 text-[11px] leading-5 text-white shadow-xl backdrop-blur-sm" role="tooltip" hidden />
+          <div className="pointer-events-none absolute bottom-2 right-2 z-10 rounded px-2 py-1 text-[10px] tracking-wide" style={{ backgroundColor: "var(--surface)", color: "var(--muted)" }}>© CARTO · © OpenStreetMap</div>
+          {mapStatus === "loading" ? <div className="map-loading pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-white/70">{t("Cargando red…", "Loading network…")}</div> : null}
         </>
       )}
     </div>

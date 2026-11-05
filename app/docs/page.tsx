@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
-import { Brand } from "@/components/brand";
-export const metadata: Metadata={title:"Datos abiertos y documentación",description:"Fuentes GTFS del Metrobús, límites de la simulación y mapa CARTO con deck.gl."};
-export default function DocsPage(){return <main className="document-page">
-  <header className="document-header"><Brand/><Link href="/">Volver al inicio ↗</Link></header>
-  <article className="document-body"><span className="eyebrow">DATOS ABIERTOS / CDMX</span><h1>Una red abierta.<br/>Un mapa transparente.</h1><p className="lead">MetroBusCDMX-Live es un proyecto independiente para explorar las siete líneas del Metrobús en un mapa interactivo.</p>
-    <div className="doc-notice"><p><strong>Esta versión es una demostración.</strong> Las rutas y estaciones provienen del GTFS adjunto. Las posiciones, velocidades, tiempos estimados y alertas se simulan. No representan la operación actual del sistema.</p></div>
-    <h2>Las fuentes de la red</h2><p>El GTFS estático contiene geometrías, estaciones, rutas y colores oficiales. Su vigencia declarada es del 1 de enero al 31 de diciembre de 2026. Se incluye una variante principal por línea, no todos los ramales y servicios, como la variante aeroportuaria de L4.</p><p>Fuente: <a href="https://www.metrobus.cdmx.gob.mx/" target="_blank" rel="noreferrer">Metrobús de la Ciudad de México</a>. Consulta la <Link href="/data/network.json" target="_blank">red transformada en JSON</Link>.</p>
-    <h2>Qué significa «en movimiento»</h2><p>La demo distribuye <strong>100 unidades</strong> sobre las geometrías reales y calcula una nueva posición cada 12 segundos. El mapa interpola el movimiento y conserva seis posiciones para las estelas. El contador mide la simulación, no es un reporte oficial.</p><p>El archivo Realtime adjunto se decodificó como una captura guardada de 829 vehículos del 4 de noviembre de 2026, a las 18:52:58 en CDMX. Es un snapshot histórico, no una API activa. El <Link href="/data/realtime-snapshot.json" target="_blank">resumen</Link> conserva su procedencia.</p>
-    <h2>MapLibre + deck.gl + CARTO</h2><p>CARTO Dark Matter añade calles, parques y contexto. MapLibre gestiona la cámara; MapLibreOverlay comparte su contexto WebGL2 en modo interleaved. Las capas GPU PathLayer, ScatterplotLayer y TripsLayer dibujan rutas, unidades y estelas temporales. Los timestamps de estelas son relativos para evitar pérdida de precisión.</p><p>El mapa permite zoom, perspectiva 3D, hover, selección y seguimiento. Acredita a CARTO y OpenStreetMap. El basemap público no necesita acceso al workspace privado.</p>
-    <h2>Un mapa propio desde CARTO Builder</h2><p>La extensión está preparada para <code>fetchMap</code> de una publicación Builder. Se necesita su ID o enlace público, no solo la página del workspace <code>clausa.app.carto.com</code>. Un <code>style.json</code> compatible también permite cambiar la base. Las capas privadas requieren un token de solo lectura y alcance mínimo, nunca credenciales de administración en el navegador.</p><p>La alternativa «CARTO Builder Embed» está documentada como iframe de una URL publicada. Es otra vista: no permite inyectar automáticamente nuestras unidades y estelas en el iframe. Para conservar interacción de flota, se prefiere fetchMap.</p>
-    <h2>Conectar una fuente real</h2><p>La capa <code>TransitProvider</code> está separada de la interfaz. Una futura integración debe validar el feed, vincular IDs Realtime con el GTFS, conservar el timestamp y normalizar los vehículos:</p>
-    <pre>{`{\n  vehicles: [{\n    id, line_id, route_id, latitude, longitude,\n    bearing, speed, direction, next_stop, timestamp\n  }],\n  source: "gtfs-rt",\n  timestamp, refresh_seconds, external_api_calls\n}`}</pre><p>Sin una URL Realtime activa y sus permisos, mantenemos <code>source: simulation</code>. El inspector distingue peticiones internas reales a la demo y llamadas externas, que son cero.</p>
-    <h2>Controles y privacidad</h2><p>Busca L1–L7 o una estación, selecciona una unidad para seguirla y activa estelas. R abre la vista cinematográfica y Esc sale. El modo grabación no exporta video; está preparado para tu capturador de pantalla.</p><p>No solicitamos ubicación ni guardamos recorridos. Lee la <Link href="/privacy">política de privacidad</Link> para conocer qué conserva tu cuenta.</p><Link className="primary-button" href="/register">Explorar la red <ArrowUpRight size={17}/></Link><footer className="document-footer">Proyecto independiente, no afiliado a Metrobús. Base © CARTO · © OpenStreetMap contributors.</footer>
-  </article></main>;}
+import { DocsContent } from "@/components/public-documents";
+
+export const metadata: Metadata = {
+  title: "Datos abiertos y documentación",
+  description: "Fuentes GTFS del Metrobús, límites de la simulación y mapa CARTO con deck.gl.",
+};
+
+export default function DocsPage() {
+  return <DocsContent />;
+}
