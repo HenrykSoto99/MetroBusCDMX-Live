@@ -1,0 +1,3 @@
+# User-supplied GTFS and upstream font licenses retain their original text formatting.
+data/gtfs/*.txt -whitespace
+public/fonts/*-OFL.txt -whitespace

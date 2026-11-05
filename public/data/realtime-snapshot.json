@@ -1,0 +1,138 @@
+{
+  "generatedAt": "2026-11-05T01:10:27Z",
+  "historical": true,
+  "isLive": false,
+  "sourceFile": "pasted_file_G5iMSO_Metrobus_GTFS_RT.proto",
+  "note": "Snapshot GTFS Realtime histórico decodificado; no representa datos en vivo. Los route_id/trip_id del snapshot pueden no coincidir con el feed GTFS estático.",
+  "feed": {
+    "gtfsRealtimeVersion": "2.0",
+    "incrementality": "FULL_DATASET",
+    "timestamp": 1793839978,
+    "timestampIso": "2026-11-05T00:52:58Z"
+  },
+  "entities": {
+    "total": 829,
+    "types": {
+      "vehicle": 829
+    },
+    "routeIds": {
+      "19430": 1,
+      "19456": 1,
+      "19470": 26,
+      "19471": 14,
+      "19472": 3,
+      "19473": 9,
+      "19475": 2,
+      "19493": 1,
+      "19515": 7,
+      "19516": 2,
+      "19517": 3,
+      "19518": 5,
+      "19519": 8,
+      "19520": 15,
+      "19522": 6,
+      "19523": 6,
+      "19556": 6,
+      "19557": 8,
+      "19558": 21,
+      "19559": 21,
+      "19562": 21,
+      "19563": 20,
+      "19564": 10,
+      "19565": 9,
+      "19566": 16,
+      "19567": 15,
+      "19576": 19,
+      "19577": 18,
+      "19578": 4,
+      "19579": 3,
+      "19582": 5,
+      "19583": 5,
+      "19983": 6,
+      "19984": 8,
+      "20211": 13,
+      "20212": 13,
+      "20295": 9,
+      "20296": 8,
+      "20439": 7,
+      "20440": 3,
+      "20931": 28,
+      "20932": 37,
+      "21153": 9,
+      "21154": 11,
+      "26860": 13,
+      "26861": 12,
+      "27054": 3,
+      "27055": 5,
+      "27371": 1,
+      "27372": 2,
+      "27453": 2,
+      "27454": 1,
+      "27455": 4,
+      "27456": 2,
+      "27457": 7,
+      "27458": 9
+    },
+    "vehicleTimestampMin": "2000-01-01T06:00:00Z",
+    "vehicleTimestampMax": "2026-11-05T00:54:37Z",
+    "vehicleExamples": [
+      {
+        "entityId": "e0537f84-55ef-46ee-b06d-02138eb1e580",
+        "vehicleId": "69379",
+        "label": "2306",
+        "routeId": "19473",
+        "startDate": "20261105",
+        "startTime": "00:09:29",
+        "position": [
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "entityId": "473952a3-6a69-4327-a0e9-fd5677208bf9",
+        "vehicleId": "69378",
+        "label": "2305",
+        "routeId": "19562",
+        "startDate": "20261105",
+        "startTime": "00:41:41",
+        "position": [
+          -99.1702880859375,
+          19.40346336364746
+        ]
+      },
+      {
+        "entityId": "02329c27-dd83-4527-90b9-0cae738b84e7",
+        "vehicleId": "69377",
+        "label": "2304",
+        "position": [
+          -99.1604232788086,
+          19.496641159057617
+        ]
+      },
+      {
+        "entityId": "ead805a7-1af1-4ce1-9425-1419918a3772",
+        "vehicleId": "69376",
+        "label": "2303",
+        "routeId": "19566",
+        "startDate": "20261105",
+        "startTime": "00:32:14",
+        "position": [
+          -99.08345031738281,
+          19.389324188232422
+        ]
+      },
+      {
+        "entityId": "44be32b3-2588-402b-8f05-ce097282eeba",
+        "vehicleId": "69375",
+        "label": "2302",
+        "routeId": "19564",
+        "startDate": "20261105",
+        "startTime": "00:02:26",
+        "position": [
+          -99.14139556884766,
+          19.394554138183594
+        ]
+      }
+    ]
+  }
+}

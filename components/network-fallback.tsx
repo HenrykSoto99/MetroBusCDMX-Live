@@ -1,0 +1,199 @@
+"use client";
+
+import { useMemo } from "react";
+import type { Coordinate, Station, TransitLine, TransitNetwork, Vehicle } from "@/lib/transit-types";
+
+export interface NetworkFallbackProps {
+  network: TransitNetwork;
+  vehicles?: Vehicle[];
+  selectedLines?: number[];
+  serviceFilter?: string;
+  selectedId?: string | null;
+  onVehicleSelect?: (id: string) => void;
+  onStationSelect?: (station: Station, lineId: number) => void;
+  onRetry?: () => void;
+  showRetry?: boolean;
+  retryLabel?: string;
+}
+
+type SvgPoint = { x: number; y: number };
+
+const ALL_LINE_IDS = [1, 2, 3, 4, 5, 6, 7];
+const VIEWBOX_WIDTH = 1000;
+const VIEWBOX_HEIGHT = 620;
+const PADDING = 30;
+
+function selectedLineIds(selectedLines?: number[]) {
+  return selectedLines === undefined ? ALL_LINE_IDS : selectedLines;
+}
+
+function isServiceVisible(vehicle: Vehicle, serviceFilter?: string) {
+  if (!serviceFilter || serviceFilter.toLowerCase() === "all" || serviceFilter.toLowerCase() === "todos") return true;
+  return vehicle.service_type === serviceFilter;
+}
+
+function projectPoint(coordinate: Coordinate, bounds: [number, number, number, number]): SvgPoint {
+  const [minLng, minLat, maxLng, maxLat] = bounds;
+  const lngSpan = Math.max(maxLng - minLng, 0.0001);
+  const latSpan = Math.max(maxLat - minLat, 0.0001);
+  return {
+    x: PADDING + ((coordinate[0] - minLng) / lngSpan) * (VIEWBOX_WIDTH - PADDING * 2),
+    y: VIEWBOX_HEIGHT - PADDING - ((coordinate[1] - minLat) / latSpan) * (VIEWBOX_HEIGHT - PADDING * 2),
+  };
+}
+
+function pathForLine(line: TransitLine, bounds: [number, number, number, number]) {
+  return line.coordinates
+    .map((coordinate, index) => {
+      const point = projectPoint(coordinate, bounds);
+      return `${index === 0 ? "M" : "L"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
+    })
+    .join(" ");
+}
+
+function networkBounds(network: TransitNetwork, lines: TransitLine[]): [number, number, number, number] {
+  const coordinates = lines.flatMap((line) => line.coordinates);
+  const fallback: Coordinate[] = [[-99.2, 19.27], [-99.04, 19.54]];
+  const points = coordinates.length > 1 ? coordinates : fallback;
+  return [
+    Math.min(...points.map(([lng]) => lng)),
+    Math.min(...points.map(([, lat]) => lat)),
+    Math.max(...points.map(([lng]) => lng)),
+    Math.max(...points.map(([, lat]) => lat)),
+  ];
+}
+
+export function NetworkFallback({
+  network,
+  vehicles = [],
+  selectedLines,
+  serviceFilter,
+  selectedId,
+  onVehicleSelect,
+  onStationSelect,
+  onRetry,
+  showRetry = true,
+  retryLabel = "Reintentar mapa",
+}: NetworkFallbackProps) {
+  const selectedIds = useMemo(() => new Set(selectedLineIds(selectedLines)), [selectedLines]);
+  const lines = useMemo(
+    () => network.lines.filter((line) => selectedIds.has(line.id)),
+    [network.lines, selectedIds],
+  );
+  const bounds = useMemo(() => networkBounds(network, lines), [network, lines]);
+  const lineById = useMemo(() => new Map(network.lines.map((line) => [line.id, line])), [network.lines]);
+  const visibleVehicles = useMemo(
+    () => vehicles.filter((vehicle) => selectedIds.has(vehicle.line_id) && isServiceVisible(vehicle, serviceFilter)),
+    [vehicles, selectedIds, serviceFilter],
+  );
+
+  return (
+    <div className="map-fallback absolute inset-0 overflow-hidden bg-[#101822] text-white">
+      <svg
+        aria-label="Vista esquemática de la red de Metrobús"
+        className="absolute inset-0 h-full w-full"
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
+      >
+        <defs>
+          <filter id="network-fallback-glow" height="180%" width="180%" x="-40%" y="-40%">
+            <feGaussianBlur stdDeviation="4" />
+          </filter>
+        </defs>
+        <rect fill="#101822" height={VIEWBOX_HEIGHT} width={VIEWBOX_WIDTH} />
+        <g aria-label="Rutas">
+          {lines.map((line) => (
+            <g key={`fallback-route-${line.id}`}>
+              <path
+                d={pathForLine(line, bounds)}
+                fill="none"
+                opacity="0.25"
+                stroke={line.color}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="12"
+                filter="url(#network-fallback-glow)"
+              />
+              <path
+                d={pathForLine(line, bounds)}
+                fill="none"
+                opacity="0.95"
+                stroke={line.color}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="4"
+              />
+            </g>
+          ))}
+        </g>
+        <g aria-label="Estaciones">
+          {lines.flatMap((line) =>
+            line.stations.map((station) => {
+              const point = projectPoint(station.coordinates, bounds);
+              return (
+                <circle
+                  key={`fallback-station-${line.id}-${station.id}`}
+                  cx={point.x}
+                  cy={point.y}
+                  fill="#f8fafc"
+                  r="2.8"
+                  stroke={line.color}
+                  strokeWidth="1.5"
+                  tabIndex={0}
+                  onClick={() => onStationSelect?.(station, line.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") onStationSelect?.(station, line.id);
+                  }}
+                >
+                  <title>{`${station.name} · ${line.code}`}</title>
+                </circle>
+              );
+            }),
+          )}
+        </g>
+        <g aria-label="Vehículos">
+          {visibleVehicles.map((vehicle) => {
+            const line = lineById.get(vehicle.line_id);
+            if (!line || !Number.isFinite(vehicle.longitude) || !Number.isFinite(vehicle.latitude)) return null;
+            const point = projectPoint([vehicle.longitude, vehicle.latitude], bounds);
+            const selected = vehicle.id === selectedId;
+            return (
+              <g
+                key={`fallback-vehicle-${vehicle.id}`}
+                className="cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => onVehicleSelect?.(vehicle.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") onVehicleSelect?.(vehicle.id);
+                }}
+              >
+                <circle cx={point.x} cy={point.y} fill={line.color} opacity="0.35" r={selected ? 13 : 9} filter="url(#network-fallback-glow)" />
+                <circle cx={point.x} cy={point.y} fill={line.color} r={selected ? 5.5 : 3.8} stroke={selected ? "#f8fafc" : "#0b1017"} strokeWidth={selected ? 2.5 : 1.25} />
+                <title>{`${line.code} · ${vehicle.id} · ${Math.round(vehicle.speed)} km/h · Próxima: ${vehicle.next_stop}`}</title>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-4 p-4">
+        <div className="map-fallback-note max-w-sm rounded-md border border-white/15 bg-[#101822]/85 px-3 py-2 text-xs text-white/80 shadow-lg backdrop-blur-sm">
+          Vista de red · base cartográfica no disponible
+        </div>
+        <div className="text-right text-[10px] tracking-wide text-white/50">CARTO · OpenStreetMap</div>
+      </div>
+      {showRetry && onRetry ? (
+        <button
+          className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-md border border-white/20 bg-white/10 px-4 py-2 text-xs font-medium text-white shadow-lg backdrop-blur transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/60"
+          type="button"
+          onClick={onRetry}
+        >
+          {retryLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export default NetworkFallback;

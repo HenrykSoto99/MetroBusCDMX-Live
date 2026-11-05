@@ -1,0 +1,13 @@
+diff --git a/dist/cli/lib/utilities.js b/dist/cli/lib/utilities.js
+index 944f0a5227eb80cf6ff89a5453007bad34045e10..02e628e421641dc82066737ffcfa4b5a83bc0138 100644
+--- a/dist/cli/lib/utilities.js
++++ b/dist/cli/lib/utilities.js
+@@ -30,7 +30,7 @@ exports.getFileName = (filepath) => path_1.basename(filepath, exports.getFileExt
+  *
+  * @param filepath Path to image
+  */
+-exports.getImageSize = (filepath) => image_size_1.default(filepath);
++exports.getImageSize = (filepath) => image_size_1.default(require("fs").readFileSync(filepath));
+ /**
+  * Get mip map levels based on initial value
+  *

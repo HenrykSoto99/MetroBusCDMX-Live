@@ -1,0 +1,12 @@
+allowBuilds:
+  sharp: true
+  esbuild: true
+  unrs-resolver: true
+overrides:
+  postcss: 8.5.32
+  sharp: 0.35.5
+  uuid: 11.1.1
+  fflate: 0.7.5
+  image-size: 2.0.4
+patchedDependencies:
+  texture-compressor@1.0.2: patches/texture-compressor@1.0.2.patch
