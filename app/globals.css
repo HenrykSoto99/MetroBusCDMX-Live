@@ -570,3 +570,22 @@ html[data-theme='light'] .mobile-user-controls button{color:#27373f}
 .map-controls button[aria-disabled='true'] { opacity: .55; cursor: not-allowed; }
 .map-bottom-status { max-width: calc(100% - 30px); flex-wrap: wrap; }
 .white-vehicle-key { white-space: nowrap; }
+
+/* Compact controls belong to the hero map only; page text keeps normal scrolling. */
+.hero-map-navigation { position: absolute; top: 82px; right: 32px; z-index: 4; display: flex; flex-direction: column; align-items: flex-end; gap: 9px; }
+.hero-map-controls { display: flex; background: #15191df0; border: 1px solid #ffffff20; border-radius: 6px; box-shadow: 0 5px 20px #0002; overflow: hidden; }
+.hero-map-controls button { width: 36px; height: 36px; display: grid; place-items: center; color: #e0e4e5; cursor: pointer; }
+.hero-map-controls button + button { border-left: 1px solid #ffffff18; }
+.hero-map-controls button:hover { background: #ffffff0c; color: var(--red); }
+.hero-map-controls button:focus-visible { outline: 2px solid var(--red); outline-offset: -3px; }
+.hero-map-controls button[aria-disabled='true'] { opacity: .4; cursor: not-allowed; }
+.hero-map-navigation > span { color: var(--muted); font-size: 8px; pointer-events: none; }
+html[data-theme='light'] .hero-map-controls { background: #fffffff2; border-color: #25282a25; }
+html[data-theme='light'] .hero-map-controls button { color: #47565d; }
+html[data-theme='light'] .hero-map-controls button + button { border-color: #25282a18; }
+html[data-theme='light'] .hero-map-controls button:hover { background: #25282a06; color: var(--red); }
+@media(max-width: 700px) { .hero-map-navigation { top: 70px; right: 25px; } }
+@media(max-width: 390px) { .hero-map-navigation { right: 20px; } .hero-map-controls button { width: 34px; height: 34px; } }
+
+.filter-line[role='checkbox'] { width: 100%; text-align: left; }
+.filter-line[role='checkbox']:focus-visible { outline: 1px solid #ee6970; outline-offset: 3px; }

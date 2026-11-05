@@ -43,4 +43,38 @@ describe("map control integration", () => {
     expect(tooltip).not.toContain("event.preventDefault()");
     expect(tooltip).not.toContain("event.stopPropagation()");
   });
+
+  it("keeps landing stations compact without shrinking dashboard markers", () => {
+    const map = source("../components/LiveMap.tsx");
+    expect(map).toContain('currentProps.variant === "hero" ? 10 : Math.max(20, Math.min(36');
+    expect(map).toContain('getLineWidth: currentProps.variant === "hero" ? 1 : 2');
+    expect(map).toContain('variant={variant}');
+    const fallback = source("../components/network-fallback.tsx");
+    expect(fallback).toContain('variant === "hero" ? 10 : 18');
+  });
+
+  it("provides wheel zoom and restores the exact initial hero view", () => {
+    const map = source("../components/LiveMap.tsx");
+    expect(map).toContain("cooperativeGestures: false");
+    expect(map).toContain("center: HERO_CENTER");
+    expect(map).toContain("zoom: 11.3");
+    expect(map).toContain("pitch: 42");
+    expect(map).toContain("bearing: -15");
+    const landing = source("../components/landing.tsx");
+    expect(landing).toContain("command={mapCommand}");
+    expect(landing).toContain('t("Restablecer vista inicial", "Reset initial view")');
+    expect(landing).toContain('if (type === "reset") setSelectedLine(null)');
+  });
+
+  it("opens the actual line-filter section with native accessible row controls", () => {
+    const sidebar = source("../components/Sidebar.tsx");
+    expect(sidebar).toContain("data-line-filter-section");
+    expect(sidebar).toContain('role="checkbox" aria-checked={selected}');
+    expect(sidebar).toContain("onClick={() => toggleLine(line.id)}");
+    const dashboard = source("../components/dashboard.tsx");
+    expect(dashboard).toContain("onClick={openLineFilters}");
+    expect(dashboard).toContain("useDashboard.persist.rehydrate()");
+    expect(source("../stores/dashboard.ts")).toContain("skipHydration: true");
+    expect(source("../app/globals.css")).toContain(".filter-line[role='checkbox'] { width: 100%");
+  });
 });

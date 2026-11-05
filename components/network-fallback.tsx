@@ -10,6 +10,7 @@ export interface NetworkFallbackProps {
   vehicles?: Vehicle[];
   trails?: boolean;
   dataSource?: "simulation" | "gtfs-rt";
+  variant?: "hero" | "dashboard";
   selectedLines?: number[];
   serviceFilter?: string;
   selectedId?: string | null;
@@ -72,6 +73,7 @@ export function NetworkFallback({
   vehicles = [],
   trails = false,
   dataSource = "gtfs-rt",
+  variant = "dashboard",
   selectedLines,
   serviceFilter,
   selectedId,
@@ -84,6 +86,8 @@ export function NetworkFallback({
   const { theme } = usePreferences();
   const { t } = useTranslation();
   const background = theme === "light" ? "#f4f5f2" : "#101822";
+  const stationSize = variant === "hero" ? 10 : 18;
+  const stationHaloRadius = variant === "hero" ? 6 : 11;
   const historyRef = useRef(new Map<string, TrailSample[]>());
   const historySourceRef = useRef(dataSource);
   const [history, setHistory] = useState(new Map<string, TrailSample[]>());
@@ -194,8 +198,8 @@ export function NetworkFallback({
                     }
                   }}
                 >
-                  <circle cx={point.x} cy={point.y} r="11" fill={background} stroke={line.color} strokeWidth="2" />
-                  <image href="/brand/station-mb.svg" x={point.x - 9} y={point.y - 9} width="18" height="18" />
+                  <circle cx={point.x} cy={point.y} r={stationHaloRadius} fill={background} stroke={line.color} strokeWidth={variant === "hero" ? 1 : 2} />
+                  <image href="/brand/station-mb.svg" x={point.x - stationSize / 2} y={point.y - stationSize / 2} width={stationSize} height={stationSize} />
                   <title>{`${station.name} · ${line.code} · ID: ${station.id}`}</title>
                 </g>
               );

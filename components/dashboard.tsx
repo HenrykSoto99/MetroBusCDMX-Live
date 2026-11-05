@@ -60,6 +60,7 @@ export function Dashboard({ network, initialFleet, user }: DashboardProps) {
   const theme = usePreferences((preferences) => preferences.theme);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [filterRequested, setFilterRequested] = useState(false);
   const [alertsOpen, setAlertsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [focus, setFocus] = useState<{ key: string; lineId?: number; coordinates?: Coordinate; zoom?: number } | null>(null);
@@ -72,6 +73,10 @@ export function Dashboard({ network, initialFleet, user }: DashboardProps) {
 
   const accountName = user.name ?? user.email ?? t("usuario", "user");
 
+  useEffect(() => {
+    void useDashboard.persist.rehydrate();
+  }, []);
+
   const openPanel = () => {
     setSidebarOpen(true);
     setMobileOpen(window.matchMedia("(max-width: 900px)").matches);
@@ -80,6 +85,29 @@ export function Dashboard({ network, initialFleet, user }: DashboardProps) {
     setSidebarOpen(false);
     setMobileOpen(false);
   };
+
+  const openLineFilters = () => {
+    openPanel();
+    setFilterRequested(true);
+  };
+
+  useEffect(() => {
+    if (!filterRequested) return;
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        const sections = [...document.querySelectorAll<HTMLElement>("[data-line-filter-section]")];
+        const section = sections.find(node => node.getBoundingClientRect().width > 0);
+        if (section) {
+          const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          section.scrollIntoView({ block: "center", behavior: reduced ? "instant" : "smooth" });
+          section.querySelector<HTMLElement>('button[role="checkbox"],input[type="checkbox"]')?.focus({ preventScroll: true });
+        }
+        setFilterRequested(false);
+      });
+    });
+    return () => { cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); };
+  }, [filterRequested, sidebarOpen, mobileOpen]);
 
   useEffect(() => {
     const clockTimer = window.setInterval(() => setClock(new Date().toISOString()), 1000);
@@ -163,7 +191,7 @@ export function Dashboard({ network, initialFleet, user }: DashboardProps) {
         <Brand compact />
         <div className="rail-main">
           <button className="rail-button active" aria-label={t("Mostrar mapa", "Show map")} data-icon-hint={t("Mapa", "Map")} onClick={() => setSidebarOpen(!sidebarOpen)}><MapIcon size={20} /></button>
-          <button className="rail-button" aria-label={t("Ver filtros de líneas", "View line filters")} data-icon-hint={t("Filtros de líneas", "Line filters")} onClick={openPanel}><Route size={20} /></button>
+          <button className="rail-button" aria-label={t("Ver filtros de líneas", "View line filters")} data-icon-hint={t("Filtros de líneas", "Line filters")} onClick={openLineFilters}><Route size={20} /></button>
           <button className={`rail-button ${alertsOpen ? "active" : ""}`} aria-label={t("Alertas de servicio", "Service alerts")} data-icon-hint={t("Alertas", "Alerts")} onClick={() => setAlertsOpen(!alertsOpen)}><Bell size={20} /><i /></button>
         </div>
         <div className="rail-bottom">
@@ -180,7 +208,7 @@ export function Dashboard({ network, initialFleet, user }: DashboardProps) {
       <LiveMap network={network} vehicles={fleet.vehicles} selectedLines={state.selectedLines} serviceFilter={state.serviceFilter} showRoutes={state.showRoutes} trails={state.trails} recording={state.recording} selectedId={state.selectedId} following={state.following} focus={focus} command={command} dataSource={fleet.source} onViewModeChange={setIs3D} onMapAvailabilityChange={setMapAvailable} onVehicleSelect={(id) => { state.selectVehicle(id); setSelectedStation(null); }} onStationSelect={(station, lineId) => { setSelectedStation({ station, lineId }); state.selectVehicle(null); }} />
       {!state.recording && <>
         <div className="map-header">
-          <button className="map-panel-button icon-button" onClick={openPanel} aria-label={t("Abrir panel de líneas", "Open line panel")} data-icon-hint={t("Filtros de líneas", "Line filters")}><Menu size={18} /></button>
+          <button className="map-panel-button icon-button" onClick={openLineFilters} aria-label={t("Abrir panel de líneas", "Open line panel")} data-icon-hint={t("Filtros de líneas", "Line filters")}><Menu size={18} /></button>
           <div className="map-heading"><span className="map-heading-title"><img src="/brand/app-logo.png" width={20} height={20} alt="" aria-hidden="true" />{t("Ciudad de México", "Mexico City")}</span><span>{t("METROBÚS / VISTA DE RED", "METROBÚS / NETWORK VIEW")}</span></div>
           <div className="map-header-right"><span className="map-demo"><span className="status-dot" /> {t("SIMULACIÓN", "SIMULATION")}</span><span className="map-clock mono">{formatTime(clock, locale)} <small>CDMX</small></span><PreferenceControls /></div>
         </div>

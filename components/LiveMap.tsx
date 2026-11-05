@@ -400,7 +400,7 @@ export function LiveMap({
     const currentTime = tripOriginMsRef.current === null ? 0 : (now - tripOriginMsRef.current) / 1000;
     const routeData = staticDataRef.current.routes;
     const stationData = staticDataRef.current.stations;
-    const stationIconSize = currentProps.variant === "hero" ? 15 : Math.max(20, Math.min(36, 20 + (map.getZoom() - 11) * 4));
+    const stationIconSize = currentProps.variant === "hero" ? 10 : Math.max(20, Math.min(36, 20 + (map.getZoom() - 11) * 4));
     const layers = [
       new PathLayer<RoutePoint>({
         id: "metrobus-route-glow",
@@ -476,7 +476,7 @@ export function LiveMap({
         getFillColor: theme === "light" ? [255, 255, 255, 230] : [10, 12, 14, 230],
         getLineColor: (station) => colorToRgba(station.color, 255),
         lineWidthUnits: "pixels",
-        getLineWidth: 2,
+        getLineWidth: currentProps.variant === "hero" ? 1 : 2,
         stroked: true,
         filled: true,
         parameters: OVERLAY_PARAMETERS,
@@ -655,7 +655,9 @@ export function LiveMap({
           bearing: currentProps.variant === "hero" ? -15 : 0,
           maxPitch: 65,
           attributionControl: false,
-          cooperativeGestures: currentProps.variant === "hero",
+          // Wheel zoom works on the map; pointer-transparent hero text preserves page scroll elsewhere.
+          cooperativeGestures: false,
+          minZoom: currentProps.variant === "hero" ? 9 : 0,
         });
         appliedStyleRef.current = styleRef.current;
         mapRef.current = map;
@@ -923,6 +925,7 @@ export function LiveMap({
           vehicles={vehicles}
           trails={trails}
           dataSource={dataSource}
+          variant={variant}
           selectedLines={selectedLines}
           serviceFilter={serviceFilter}
           selectedId={selectedId}

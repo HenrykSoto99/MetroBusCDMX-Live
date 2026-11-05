@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, ArrowRight, Menu, X, Radio, Route, Layers3, MoveUpRight, ScanLine, Bell, Github, ChevronRight, MapPin } from "lucide-react";
+import { ArrowUpRight, ArrowRight, Menu, X, Radio, Route, Layers3, MoveUpRight, ScanLine, Bell, Github, ChevronRight, MapPin, Plus, Minus, RotateCcw } from "lucide-react";
 import { Brand } from "./brand";
 import { Button } from "./ui/button";
 import { PreferenceControls } from "./preference-controls";
@@ -25,6 +25,18 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [count, setCount] = useState(0);
   const [mapReady, setMapReady] = useState(false);
+  const [mapCommand, setMapCommand] = useState<{ type: "zoom-in" | "zoom-out" | "reset"; nonce: number } | null>(null);
+  const runMapCommand = (type: "zoom-in" | "zoom-out" | "reset") => {
+    if (!mapReady) return;
+    if (type === "reset") setSelectedLine(null);
+    setMapCommand(previous => ({ type, nonce: (previous?.nonce ?? 0) + 1 }));
+  };
+  const selectPreviewLine = (id: number) => {
+    if (selectedLine === id) {
+      setSelectedLine(null);
+      runMapCommand("reset");
+    } else setSelectedLine(id);
+  };
   const features = [
     { number: "01", icon: Radio, title: t("La red, en un vistazo.", "The network, at a glance."), text: t("Unidades en movimiento sobre un mapa real de la CDMX. Todo el sistema, sin cambiar de pantalla.", "Moving vehicles on a real CDMX map. The whole system, without leaving the screen."), detail: t("MAPA INTERACTIVO", "INTERACTIVE MAP") },
     { number: "02", icon: Route, title: t("Tu línea. Tu camino.", "Your line. Your way."), text: t("Busca estaciones, filtra tus líneas y encuentra el recorrido que te conecta con la ciudad.", "Search stations, filter lines, and find the route that connects you to the city."), detail: t("SIETE LÍNEAS, UNA RED", "SEVEN LINES, ONE NETWORK") },
@@ -64,9 +76,17 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
     <main>
       <section className="hero" aria-label="MetroBusCDMX-Live">
         <div className="hero-map-scene">
-          <BusMap network={network} vehicles={fleet.vehicles} dataSource={fleet.source} variant="hero" selectedLines={selectedLine ? [selectedLine] : undefined} focus={selectedLine ? { key: `hero-${selectedLine}`, lineId: selectedLine } : null} onMapReady={() => setMapReady(true)}/>
+          <BusMap network={network} vehicles={fleet.vehicles} dataSource={fleet.source} variant="hero" selectedLines={selectedLine ? [selectedLine] : undefined} focus={selectedLine ? { key: `hero-${selectedLine}`, lineId: selectedLine } : null} command={mapCommand} onMapAvailabilityChange={setMapReady} onMapReady={() => setMapReady(true)}/>
           <div className="hero-map-shade"/>
           <div className="hero-map-top"><span><MapPin size={12}/> {t("CIUDAD DE MÉXICO", "MEXICO CITY")}</span><span className="map-simulation"><span className="status-dot"/> {t("DEMO EN MOVIMIENTO", "MOVING DEMO")}</span></div>
+          <div className="hero-map-navigation" aria-label={t("Navegación del mapa", "Map navigation")}>
+            <div className="hero-map-controls">
+              <button type="button" onClick={() => runMapCommand("zoom-in")} aria-disabled={!mapReady} aria-label={t("Acercar mapa", "Zoom in")} data-icon-hint={t("Acercar mapa", "Zoom in")}><Plus size={17}/></button>
+              <button type="button" onClick={() => runMapCommand("zoom-out")} aria-disabled={!mapReady} aria-label={t("Alejar mapa", "Zoom out")} data-icon-hint={t("Alejar mapa", "Zoom out")}><Minus size={17}/></button>
+              <button type="button" onClick={() => runMapCommand("reset")} aria-disabled={!mapReady} aria-label={t("Restablecer vista inicial", "Reset initial view")} data-icon-hint={t("Restablecer vista inicial", "Reset initial view")}><RotateCcw size={16}/></button>
+            </div>
+            <span>{t("Scroll para acercar o alejar", "Scroll to zoom in or out")}</span>
+          </div>
           <div className="map-crosshair" aria-hidden="true"><span/><span/></div>
           <div className="hero-coordinate">19.4326° N<br/>99.1332° W</div>
           <div className="hero-fleet-card"><span className="fleet-card-icon"><Radio size={18}/></span><div><span className="eyebrow">{t("EL PULSO DE LA RED", "THE NETWORK'S PULSE")}</span><div className="fleet-card-value">{count}<span>{t("buses en vía", "buses on route")}</span></div><span className="fleet-card-note"><span className="status-dot"/>{mapReady ? t("Posiciones simuladas · actualización cada 12 s", "Simulated positions · updates every 12 s") : t("Preparando el mapa de la ciudad", "Preparing the city map")}</span></div><div className="mini-bars" aria-hidden="true">{[30,48,42,64,53,72,62,84,68,96,82].map((height,i) => <i key={i} style={{height:`${height}%`}}/>)}</div></div>
@@ -86,7 +106,7 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
       <section className="network-section page-container" id="la-red">
         <div className="network-label"><span className="eyebrow">{t("UNA CIUDAD. SIETE LÍNEAS.", "ONE CITY. SEVEN LINES.")}</span><span className="muted">{t("Elige una línea para verla en el mapa", "Choose a line to preview it on the map")} <MoveUpRight size={13}/></span></div>
         <div className="line-selector" role="group" aria-label={t("Seleccionar una línea para previsualizar", "Select a line to preview")}>
-          {network.lines.map(item => <button key={item.id} className={`landing-line ${selectedLine === item.id ? "selected" : ""}`} onClick={() => setSelectedLine(selectedLine === item.id ? null : item.id)} aria-pressed={selectedLine === item.id} style={{ "--line-color": item.color } as React.CSSProperties}><span className="line-square">{item.code}</span><span>{item.name}</span><ArrowUpRight size={15}/></button>)}
+          {network.lines.map(item => <button key={item.id} className={`landing-line ${selectedLine === item.id ? "selected" : ""}`} onClick={() => selectPreviewLine(item.id)} aria-pressed={selectedLine === item.id} style={{ "--line-color": item.color } as React.CSSProperties}><span className="line-square">{item.code}</span><span>{item.name}</span><ArrowUpRight size={15}/></button>)}
         </div>
         <div className="network-meta"><span>{networkSummary}</span><Link href="/docs">{t("Explorar los datos", "Explore the data")} <ChevronRight size={13}/></Link></div>
       </section>

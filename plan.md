@@ -67,3 +67,9 @@ El usuario proporciona dos PNG y pide sustituir el logo de la landing por la pri
 Nueva petición: todas las unidades de cualquier tipo deben ser círculos blancos, no del color de su ruta; las rutas mantienen colores oficiales. La estela será claramente distinta y visible, anclada al vehículo, con historial geométrico por unidad y desvanecimiento. Se corregirá la cámara 3D con un estado real 2D/3D, encuadre útil y regreso fiable a 2D. Edificios solo si el basemap aporta polígonos/altura reales, nunca fabricar un skyline.
 
 Todos los controles iconográficos relevantes del menú/app/mapa tendrán texto visible al hover, foco y click/tap, con nombres cortos ES/EN como Seguimiento, Vista3D/Vista2D, Zoom y filtros. Una capa de tooltips en portal evita recortes por rail/drawers; click sigue ejecutando la acción y muestra una etiqueta temporal (no exige doble click). Se conserva auth, datos simulados, temas, logos, mapa de respaldo y el remoto GitHub. Se usará una revisión read-only de los cambios y checks afectados, sin publicar Netlify.
+
+## Tamaños hero y filtro de líneas — 4 noviembre 2026
+
+Reducir MB en landing de15px a10px con halo más fino; la app conserva20–36px y el fallback distingue hero/dashboard. Revisar el defecto reportado del filtro de líneas y corregirlo donde se reproduzca, conservando cambios de rutas/estaciones/flota/conteos y el estado persistente sin tocar auth.
+
+El usuario agrega revisar scroll de zoom en mapa landing y regreso a su vista inicial. El hero permite rueda sin requerir Ctrl, presenta zoom+/zoom− y Restablecer vista inicial, reusando los comandos existentes de MapLibre. El encuadre inicial sigue centro[-99.145,19.426],zoom11.3,pitch42,bearing−15; fuera del mapa la página conserva desplazamiento normal.
