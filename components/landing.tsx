@@ -22,6 +22,7 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [fleet, setFleet] = useState(initialFleet);
+  const [fleetReady, setFleetReady] = useState(false);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
   const [count, setCount] = useState(0);
   const [mapReady, setMapReady] = useState(false);
@@ -53,7 +54,9 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
       if (progress < 1) frame = requestAnimationFrame(tick);
     }
     frame = requestAnimationFrame(tick);
+    // The SSR snapshot supplies counts only. Never animate from its old clock to now.
     setFleet(createMetrobusMock());
+    setFleetReady(true);
     const interval = setInterval(() => { if (!document.hidden) setFleet(createMetrobusMock()); }, 12000);
     return () => { cancelAnimationFrame(frame); clearInterval(interval); };
   }, [initialFleet.vehicles.length, network]);
@@ -76,7 +79,7 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
     <main>
       <section className="hero" aria-label="MetroBusCDMX-Live">
         <div className="hero-map-scene">
-          <BusMap network={network} vehicles={fleet.vehicles} dataSource={fleet.source} variant="hero" selectedLines={selectedLine ? [selectedLine] : undefined} focus={selectedLine ? { key: `hero-${selectedLine}`, lineId: selectedLine } : null} command={mapCommand} onMapAvailabilityChange={setMapReady} onMapReady={() => setMapReady(true)}/>
+          {fleetReady ? <BusMap network={network} vehicles={fleet.vehicles} dataSource={fleet.source} variant="hero" selectedLines={selectedLine ? [selectedLine] : undefined} focus={selectedLine ? { key: `hero-${selectedLine}`, lineId: selectedLine } : null} command={mapCommand} onMapAvailabilityChange={setMapReady} onMapReady={() => setMapReady(true)}/> : <MapLoading/>}
           <div className="hero-map-shade"/>
           <div className="hero-map-top"><span><MapPin size={12}/> {t("CIUDAD DE MÉXICO", "MEXICO CITY")}</span><span className="map-simulation"><span className="status-dot"/> {t("DEMO EN MOVIMIENTO", "MOVING DEMO")}</span></div>
           <div className="hero-map-navigation" aria-label={t("Navegación del mapa", "Map navigation")}>

@@ -15,6 +15,16 @@ describe("real GTFS network and simulated fleet", () => {
     expect(simulateFleet(network,1793840000000)).toEqual(fleet);
     expect(simulateFleet(network,1793840012000).vehicles[0].latitude).not.toBe(fleet.vehicles[0].latitude);
   });
+  it("does not teleport the fleet across the former wall-clock modulo boundary", () => {
+    const boundary = Math.ceil(Date.UTC(2026, 10, 5) / 10_000_000) * 10_000_000;
+    const before = simulateFleet(network, boundary - 1000).vehicles;
+    const after = simulateFleet(network, boundary + 1000).vehicles;
+    for (let i = 0; i < before.length; i++) {
+      const dx = (after[i].longitude - before[i].longitude) * Math.cos(before[i].latitude * Math.PI / 180);
+      const dy = after[i].latitude - before[i].latitude;
+      expect(Math.hypot(dx, dy) * 111_320).toBeLessThan(50);
+    }
+  });
   it("interpolates positions by route length rather than vertex density", () => {
     expect(pointOnRoute([[0,0],[0,1],[0,2]],0.25).coordinates).toEqual([0,0.5]);
     expect(pointOnRoute([[0,0],[0,1]],0).coordinates).toEqual([0,0]);

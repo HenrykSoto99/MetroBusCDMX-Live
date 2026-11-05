@@ -22,8 +22,8 @@ export function pointOnRoute(coordinates: Coordinate[], progress: number): { coo
 
 export function simulateFleet(network: TransitNetwork, now = Date.now(), lineCounts: Record<number,number> = LINE_COUNTS): FleetSnapshot {
   const timestamp = new Date(now).toISOString();
-  // Time is anchored to a shared epoch. All visitors receive the same simulation phase.
-  const seconds = (now % 10_000_000) / 1000;
+  // Continuous shared epoch: never reset the whole fleet on a wall-clock modulo boundary.
+  const seconds = (now - Date.UTC(2026, 0, 1)) / 1000;
   const vehicles = network.lines.flatMap(line => {
     const count = lineCounts[line.id] ?? 50;
     return Array.from({ length: count }, (_, index) => {

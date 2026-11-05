@@ -9,7 +9,7 @@ import { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import type { Coordinate, Station, TransitNetwork, Vehicle } from "@/lib/transit-types";
 import { usePreferences, useTranslation } from "@/lib/preferences";
-import { interpolateVehicle, simulationTrailHistory, updateTrail, TRAIL_WINDOW_SECONDS, type TrailSample } from "@/lib/vehicle-trails";
+import { hasContinuousVehicleTime, interpolateVehicle, simulationTrailHistory, updateTrail, TRAIL_WINDOW_SECONDS, type TrailSample } from "@/lib/vehicle-trails";
 import { afterCameraSettles, flatCamera, perspectiveCamera, type CameraSnapshot } from "@/lib/map-camera";
 import { sync3DBuildings } from "@/lib/map-3d";
 import NetworkFallback from "@/components/network-fallback";
@@ -172,8 +172,8 @@ function resetView(map: MapLibreMap, network: TransitNetwork, variant: "hero" | 
     map.easeTo({
       center: HERO_CENTER,
       zoom: 11.3,
-      pitch: 42,
-      bearing: -15,
+      pitch: 0,
+      bearing: 0,
       duration: reducedMotion ? 0 : 700,
     });
     return;
@@ -333,14 +333,15 @@ export function LiveMap({
     const snapshotSeconds = (now - tripOriginMsRef.current) / 1000;
     const nextIds = new Set<string>();
     const nextMotions = motionsRef.current;
-    const hasNewVehicles = visibleVehicles.some((vehicle) => !nextMotions.has(vehicle.id));
+    const hasNewVehicles = visibleVehicles.some((vehicle) => !hasContinuousVehicleTime(nextMotions.get(vehicle.id)?.vehicle, vehicle));
     const demoHistory = dataSource === "simulation" && hasNewVehicles
       ? simulationTrailHistory(network, vehicles, snapshotSeconds)
       : new Map<string, TrailSample[]>();
 
     for (const vehicle of visibleVehicles) {
       const target = coordinateForVehicle(vehicle);
-      const existing = nextMotions.get(vehicle.id);
+      const previous = nextMotions.get(vehicle.id);
+      const existing = hasContinuousVehicleTime(previous?.vehicle, vehicle) ? previous : undefined;
       const from = existing ? positionAt(existing, now) : target;
       const trip = updateTrail(existing?.trip ?? demoHistory.get(vehicle.id) ?? [], from, target, snapshotSeconds, reducedMotion ? 0 : INTERPOLATION_SECONDS);
       nextMotions.set(vehicle.id, {
@@ -401,6 +402,7 @@ export function LiveMap({
     const routeData = staticDataRef.current.routes;
     const stationData = staticDataRef.current.stations;
     const stationIconSize = currentProps.variant === "hero" ? 10 : Math.max(20, Math.min(36, 20 + (map.getZoom() - 11) * 4));
+    const isHero = currentProps.variant === "hero";
     const layers = [
       new PathLayer<RoutePoint>({
         id: "metrobus-route-glow",
@@ -499,6 +501,7 @@ export function LiveMap({
       new ScatterplotLayer<VehiclePoint>({
         id: "metrobus-vehicle-halo",
         data: vehiclePoints,
+        visible: !isHero,
         radiusUnits: "pixels",
         radiusMinPixels: 8,
         radiusMaxPixels: 14,
@@ -515,15 +518,15 @@ export function LiveMap({
         id: "metrobus-vehicles",
         data: vehiclePoints,
         radiusUnits: "pixels",
-        radiusMinPixels: 5,
-        radiusMaxPixels: 9,
+        radiusMinPixels: isHero ? 2.5 : 5,
+        radiusMaxPixels: isHero ? 4 : 9,
         getPosition: (vehicle) => vehicle.position,
-        getRadius: (vehicle) => vehicle.id === currentProps.selectedId ? 7 : 5.2,
+        getRadius: (vehicle) => isHero ? 3 : vehicle.id === currentProps.selectedId ? 7 : 5.2,
         getFillColor: [255, 255, 255, 255],
         getLineColor: [14, 22, 32, 255],
-        getLineWidth: (vehicle) => vehicle.id === currentProps.selectedId ? 2.5 : 1.7,
+        getLineWidth: (vehicle) => isHero ? 1 : vehicle.id === currentProps.selectedId ? 2.5 : 1.7,
         lineWidthUnits: "pixels",
-        billboard: true,
+        billboard: !isHero,
         stroked: true,
         filled: true,
         pickable: true,
@@ -651,9 +654,11 @@ export function LiveMap({
           style: styleRef.current,
           center: currentProps.variant === "hero" ? HERO_CENTER : DEFAULT_CENTER,
           zoom: currentProps.variant === "hero" ? 11.3 : 10.9,
-          pitch: currentProps.variant === "hero" ? 42 : 0,
-          bearing: currentProps.variant === "hero" ? -15 : 0,
-          maxPitch: 65,
+          pitch: 0,
+          bearing: 0,
+          maxPitch: currentProps.variant === "hero" ? 0 : 65,
+          dragRotate: currentProps.variant !== "hero",
+          touchPitch: currentProps.variant !== "hero",
           attributionControl: false,
           // Wheel zoom works on the map; pointer-transparent hero text preserves page scroll elsewhere.
           cooperativeGestures: false,
@@ -661,6 +666,7 @@ export function LiveMap({
         });
         appliedStyleRef.current = styleRef.current;
         mapRef.current = map;
+        if (currentProps.variant === "hero") map.touchZoomRotate.disableRotation();
         view2DRef.current = flatCamera(cameraSnapshot(map));
         syncCameraRef.current = (force = false) => {
           if (!map || disposed) return;

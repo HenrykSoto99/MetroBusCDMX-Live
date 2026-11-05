@@ -226,8 +226,8 @@ export function NetworkFallback({
                   if (event.key === "Enter" || event.key === " ") onVehicleSelect?.(vehicle.id);
                 }}
               >
-                <circle cx={point.x} cy={point.y} fill="#ffffff" opacity="0.35" r={selected ? 13 : 9} filter="url(#network-fallback-glow)" />
-                <circle cx={point.x} cy={point.y} fill="#ffffff" r={selected ? 7 : 5.2} stroke="#0e1620" strokeWidth={selected ? 2.5 : 1.7} />
+                {variant !== "hero" && <circle cx={point.x} cy={point.y} fill="#ffffff" opacity="0.35" r={selected ? 13 : 9} filter="url(#network-fallback-glow)" />}
+                <circle cx={point.x} cy={point.y} fill="#ffffff" r={variant === "hero" ? 3 : selected ? 7 : 5.2} stroke="#0e1620" strokeWidth={variant === "hero" ? 1 : selected ? 2.5 : 1.7} />
                 <title>{`${line.code} · ${vehicle.id} · ${Math.round(vehicle.speed)} km/h · ${t("Próxima", "Next")}: ${vehicle.next_stop}`}</title>
               </g>
             );

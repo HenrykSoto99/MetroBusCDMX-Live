@@ -7,7 +7,7 @@ describe("map control integration", () => {
     const code = source("../components/LiveMap.tsx");
     const vehicleLayer = code.slice(code.indexOf('id: "metrobus-vehicles"'), code.indexOf('id: "metrobus-selected-vehicle"'));
     expect(vehicleLayer).toContain("getFillColor: [255, 255, 255, 255]");
-    expect(vehicleLayer).toContain("billboard: true");
+    expect(vehicleLayer).toContain("billboard: !isHero");
     expect(vehicleLayer).not.toContain("colorToRgba(vehicle.color");
     const fallback = source("../components/network-fallback.tsx");
     expect(fallback).not.toContain("fill={line.color}");
@@ -58,12 +58,37 @@ describe("map control integration", () => {
     expect(map).toContain("cooperativeGestures: false");
     expect(map).toContain("center: HERO_CENTER");
     expect(map).toContain("zoom: 11.3");
-    expect(map).toContain("pitch: 42");
-    expect(map).toContain("bearing: -15");
+    const reset = map.slice(map.indexOf("function resetView("), map.indexOf("function likelyStyleFailure("));
+    expect(reset).toContain("pitch: 0");
+    expect(reset).toContain("bearing: 0");
     const landing = source("../components/landing.tsx");
     expect(landing).toContain("command={mapCommand}");
     expect(landing).toContain('t("Restablecer vista inicial", "Reset initial view")');
     expect(landing).toContain('if (type === "reset") setSelectedLine(null)');
+  });
+
+  it("grounds the hero vehicles without halo or accidental perspective while preserving the app", () => {
+    const map = source("../components/LiveMap.tsx");
+    expect(map).toContain("visible: !isHero");
+    expect(map).toContain("radiusMinPixels: isHero ? 2.5 : 5");
+    expect(map).toContain("radiusMaxPixels: isHero ? 4 : 9");
+    expect(map).toContain('maxPitch: currentProps.variant === "hero" ? 0 : 65');
+    expect(map).toContain('dragRotate: currentProps.variant !== "hero"');
+    expect(map).toContain('touchPitch: currentProps.variant !== "hero"');
+    expect(map).toContain("map.touchZoomRotate.disableRotation()");
+    const fallback = source("../components/network-fallback.tsx");
+    expect(fallback).toContain('variant !== "hero" && <circle');
+    expect(fallback).toContain('r={variant === "hero" ? 3 : selected ? 7 : 5.2}');
+  });
+
+  it("seeds the client clock before mounting the hero and rejects stale interpolation", () => {
+    const landing = source("../components/landing.tsx");
+    expect(landing).toContain("const [fleetReady, setFleetReady] = useState(false)");
+    expect(landing).toContain("setFleet(createMetrobusMock());\n    setFleetReady(true)");
+    expect(landing).toContain("{fleetReady ? <BusMap");
+    const map = source("../components/LiveMap.tsx");
+    expect(map).toContain("hasContinuousVehicleTime(previous?.vehicle, vehicle) ? previous : undefined");
+    expect(map).toContain("const from = existing ? positionAt(existing, now) : target");
   });
 
   it("opens the actual line-filter section with native accessible row controls", () => {

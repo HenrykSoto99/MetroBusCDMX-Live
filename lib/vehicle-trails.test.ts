@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { createMetrobusMock, metrobusNetwork } from "./metrobus-mock";
-import { interpolateVehicle, simulationTrailHistory, updateTrail, TRAIL_WINDOW_SECONDS } from "./vehicle-trails";
+import { hasContinuousVehicleTime, interpolateVehicle, simulationTrailHistory, updateTrail, TRAIL_WINDOW_SECONDS } from "./vehicle-trails";
 
 describe("vehicle trails", () => {
   const epoch = Date.UTC(2026, 10, 5, 3, 30, 0);
+
+  it("never animates stale, backwards or missing snapshots across the city", () => {
+    const previous = createMetrobusMock(epoch).vehicles[0];
+    const current = (offset: number) => ({ ...previous, timestamp: new Date(epoch + offset).toISOString() });
+    expect(hasContinuousVehicleTime(previous, current(12_000))).toBe(true);
+    expect(hasContinuousVehicleTime(previous, current(24_000))).toBe(true);
+    expect(hasContinuousVehicleTime(previous, current(4 * 3600_000))).toBe(false);
+    expect(hasContinuousVehicleTime(previous, current(60_000))).toBe(false);
+    expect(hasContinuousVehicleTime(previous, current(-12_000))).toBe(false);
+    expect(hasContinuousVehicleTime(undefined, current(0))).toBe(false);
+    expect(hasContinuousVehicleTime(previous, { ...previous, timestamp: "invalid" })).toBe(false);
+  });
 
   it("preloads the same simulated unit's history, not invented live API positions", () => {
     const fleet = createMetrobusMock(epoch);

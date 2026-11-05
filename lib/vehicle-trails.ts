@@ -5,6 +5,13 @@ export const TRAIL_WINDOW_SECONDS = 72;
 export const TRAIL_STEP_SECONDS = 12;
 export interface TrailSample { position: Coordinate; timestamp: number }
 
+/** A stale or backwards clock is a new observation, not a trip across the city. */
+export function hasContinuousVehicleTime(previous: Vehicle | undefined, current: Vehicle): boolean {
+  if (!previous) return false;
+  const gap = Date.parse(current.timestamp) - Date.parse(previous.timestamp);
+  return Number.isFinite(gap) && gap >= 0 && gap <= TRAIL_STEP_SECONDS * 2 * 1000;
+}
+
 /** Seed only our reproducible demo. GTFS-RT histories must come from observed positions. */
 export function simulationTrailHistory(
   network: TransitNetwork,
