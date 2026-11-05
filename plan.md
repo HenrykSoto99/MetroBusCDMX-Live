@@ -61,3 +61,9 @@ Nueva petición: agregar inglés/español y light/darkmode. Se creará un storeZ
 ## Logos adjuntos — 4 noviembre 2026
 
 El usuario proporciona dos PNG y pide sustituir el logo de la landing por la primera imagen y utilizar la segunda en APP/dondeconvenga. Se conservarán originales en el proyecto y se prepararán copias de tamaño apropiado sin redibujar/recolorear. Si hay padding transparente, se recorta solo ese espacio vacío. Brand distingue landing/app; el segundo identifica el rail/app y favicon. Los pictogramas de estación siguen MB. El logo/plataforma también puede actualizarse con la identidad deapp mediante URLduradera.
+
+## Legibilidad de la flota y controles — 4 noviembre 2026
+
+Nueva petición: todas las unidades de cualquier tipo deben ser círculos blancos, no del color de su ruta; las rutas mantienen colores oficiales. La estela será claramente distinta y visible, anclada al vehículo, con historial geométrico por unidad y desvanecimiento. Se corregirá la cámara 3D con un estado real 2D/3D, encuadre útil y regreso fiable a 2D. Edificios solo si el basemap aporta polígonos/altura reales, nunca fabricar un skyline.
+
+Todos los controles iconográficos relevantes del menú/app/mapa tendrán texto visible al hover, foco y click/tap, con nombres cortos ES/EN como Seguimiento, Vista3D/Vista2D, Zoom y filtros. Una capa de tooltips en portal evita recortes por rail/drawers; click sigue ejecutando la acción y muestra una etiqueta temporal (no exige doble click). Se conserva auth, datos simulados, temas, logos, mapa de respaldo y el remoto GitHub. Se usará una revisión read-only de los cambios y checks afectados, sin publicar Netlify.

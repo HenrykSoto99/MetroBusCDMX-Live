@@ -14,7 +14,7 @@ export function Brand({ compact = false, light = false, variant }: {
   const source = kind === "app" ? "/brand/app-logo.png" : "/brand/landing-logo.png";
 
   return (
-    <Link href="/" className={cn("brand", light && "brand-light")} aria-label={t("MetroBusCDMX-Live — inicio", "MetroBusCDMX-Live — home")}>
+    <Link href="/" className={cn("brand", light && "brand-light")} aria-label={t("MetroBusCDMX-Live — inicio", "MetroBusCDMX-Live — home")} data-icon-hint={t("Inicio", "Home")}>
       <span className={`brand-mark brand-image brand-image-${kind}`} aria-hidden="true">
         <img src={source} alt="" width={kind === "app" ? 256 : 288} height={kind === "app" ? 256 : 128} />
       </span>

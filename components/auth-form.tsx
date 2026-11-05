@@ -196,6 +196,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             className="password-toggle"
             onClick={() => setShowPassword((visible) => !visible)}
             aria-label={showPassword ? t("Ocultar contraseña", "Hide password") : t("Mostrar contraseña", "Show password")}
+            data-icon-hint={showPassword ? t("Ocultar contraseña", "Hide password") : t("Mostrar contraseña", "Show password")}
           >
             {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
           </button>

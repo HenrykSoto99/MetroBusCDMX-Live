@@ -9,6 +9,9 @@ import { MapLibreOverlay } from "@deck.gl/maplibre";
 import type { Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 import type { Coordinate, Station, TransitNetwork, Vehicle } from "@/lib/transit-types";
 import { usePreferences, useTranslation } from "@/lib/preferences";
+import { interpolateVehicle, simulationTrailHistory, updateTrail, TRAIL_WINDOW_SECONDS, type TrailSample } from "@/lib/vehicle-trails";
+import { afterCameraSettles, flatCamera, perspectiveCamera, type CameraSnapshot } from "@/lib/map-camera";
+import { sync3DBuildings } from "@/lib/map-3d";
 import NetworkFallback from "@/components/network-fallback";
 
 const CARTO_DARK_MATTER_STYLE = BASEMAP.DARK_MATTER;
@@ -16,11 +19,11 @@ const HERO_CENTER: Coordinate = [-99.145, 19.426];
 const ALL_LINE_IDS = [1, 2, 3, 4, 5, 6, 7];
 const INTERPOLATION_MS = 12_000;
 const INTERPOLATION_SECONDS = INTERPOLATION_MS / 1000;
-const TRAIL_SNAPSHOT_COUNT = 6;
 const FRAME_INTERVAL_MS = 1000 / 60;
 const MAP_LOAD_TIMEOUT_MS = 10_000;
 const DEFAULT_CENTER: Coordinate = [-99.145, 19.426];
 const STATION_ICON_MAPPING = { mb: { x: 0, y: 0, width: 128, height: 128, mask: false } };
+const OVERLAY_PARAMETERS = { depthCompare: "always" as const, depthWriteEnabled: false, cullMode: "none" as const };
 
 // CARTO Builder integration belongs in the main integration layer in a future pass:
 // fetchMap({cartoMapId: "<published-map-id>"}) requires a published map and scoped credentials.
@@ -60,8 +63,6 @@ type TripPoint = {
   id: string;
 };
 
-type TripSample = { position: Coordinate; timestamp: number };
-
 type MotionState = {
   vehicle: Vehicle;
   from: Coordinate;
@@ -69,7 +70,7 @@ type MotionState = {
   current: Coordinate;
   startedAt: number;
   duration: number;
-  trip: TripSample[];
+  trip: TrailSample[];
 };
 
 type RoutePoint = {
@@ -100,10 +101,13 @@ export interface LiveMapProps {
   following?: boolean;
   focus?: { key: string; lineId?: number; coordinates?: Coordinate; zoom?: number } | null;
   command?: { type: "zoom-in" | "zoom-out" | "reset" | "pitch"; nonce: number } | null;
+  dataSource?: "simulation" | "gtfs-rt";
   variant?: "hero" | "dashboard";
   onVehicleSelect?: (id: string) => void;
   onStationSelect?: (station: Station, lineId: number) => void;
   onMapReady?: () => void;
+  onViewModeChange?: (is3D: boolean) => void;
+  onMapAvailabilityChange?: (available: boolean) => void;
   retryLabel?: string;
 }
 
@@ -131,10 +135,7 @@ function distanceSquared(a: Coordinate, b: Coordinate) {
 function positionAt(motion: MotionState, now: number): Coordinate {
   if (motion.duration <= 0) return motion.to;
   const progress = Math.max(0, Math.min(1, (now - motion.startedAt) / motion.duration));
-  return [
-    motion.from[0] + (motion.to[0] - motion.from[0]) * progress,
-    motion.from[1] + (motion.to[1] - motion.from[1]) * progress,
-  ];
+  return interpolateVehicle(motion.from, motion.to, progress);
 }
 
 function boundsForNetwork(network: TransitNetwork): [[number, number], [number, number]] {
@@ -151,10 +152,17 @@ function adaptivePadding(container: HTMLElement) {
   return Math.max(32, Math.min(112, Math.round(shortestSide * 0.09)));
 }
 
+function cameraSnapshot(map: MapLibreMap): CameraSnapshot {
+  const center = map.getCenter();
+  return { center: [center.lng, center.lat], zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() };
+}
+
 function fitNetwork(map: MapLibreMap, network: TransitNetwork, container: HTMLElement, duration = 650) {
   map.fitBounds(boundsForNetwork(network), {
     padding: adaptivePadding(container),
     maxZoom: 13,
+    pitch: 0,
+    bearing: 0,
     duration,
   });
 }
@@ -170,7 +178,6 @@ function resetView(map: MapLibreMap, network: TransitNetwork, variant: "hero" | 
     });
     return;
   }
-  map.easeTo({ pitch: 0, bearing: 0, duration: reducedMotion ? 0 : 450 });
   fitNetwork(map, network, container, reducedMotion ? 0 : 700);
 }
 
@@ -189,11 +196,6 @@ function colorToRgba(color: string, alpha = 255): [number, number, number, numbe
     return [parseInt(match.slice(0, 2), 16), parseInt(match.slice(2, 4), 16), parseInt(match.slice(4, 6), 16), alpha];
   }
   return [227, 6, 19, alpha];
-}
-
-function trimTrip(trip: TripSample[]) {
-  // Six observed samples plus one future interpolation endpoint.
-  return trip.slice(-(TRAIL_SNAPSHOT_COUNT + 1));
 }
 
 function stationFromPick(network: TransitNetwork, point: StationPoint) {
@@ -225,10 +227,13 @@ export function LiveMap({
   following = false,
   focus = null,
   command = null,
+  dataSource = "gtfs-rt",
   variant = "dashboard",
   onVehicleSelect,
   onStationSelect,
   onMapReady,
+  onViewModeChange,
+  onMapAvailabilityChange,
   retryLabel,
 }: LiveMapProps) {
   const { theme } = usePreferences();
@@ -247,11 +252,16 @@ export function LiveMap({
   const tooltipRef = useRef<HTMLDivElement>(null);
   const propsRef = useRef<LiveMapProps>({ network, vehicles });
   const motionsRef = useRef(new Map<string, MotionState>());
+  const motionSourceRef = useRef(dataSource);
   const staticDataRef = useRef<StaticMapData>({ routes: [], stations: [] });
   const tripOriginMsRef = useRef<number | null>(null);
   const renderGPURef = useRef<(now: number) => void>(() => undefined);
   const animationFrameRef = useRef<number | null>(null);
   const lastCommandNonceRef = useRef<number | null>(null);
+  const view2DRef = useRef<CameraSnapshot | null>(null);
+  const viewIs3DRef = useRef(false);
+  const syncCameraRef = useRef<(force?: boolean) => void>(() => undefined);
+  const followUpdateRef = useRef(false);
   const [mapStatus, setMapStatus] = useState<MapStatus>("loading");
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("pending");
   const [retryNonce, setRetryNonce] = useState(0);
@@ -269,10 +279,13 @@ export function LiveMap({
     following,
     focus,
     command,
+    dataSource,
     variant,
     onVehicleSelect,
     onStationSelect,
     onMapReady,
+    onViewModeChange,
+    onMapAvailabilityChange,
     retryLabel,
   };
 
@@ -311,19 +324,25 @@ export function LiveMap({
 
   useEffect(() => {
     const now = performance.now();
+    if (motionSourceRef.current !== dataSource) {
+      motionsRef.current.clear();
+      tripOriginMsRef.current = now;
+      motionSourceRef.current = dataSource;
+    }
     if (tripOriginMsRef.current === null) tripOriginMsRef.current = now;
     const snapshotSeconds = (now - tripOriginMsRef.current) / 1000;
     const nextIds = new Set<string>();
     const nextMotions = motionsRef.current;
+    const hasNewVehicles = visibleVehicles.some((vehicle) => !nextMotions.has(vehicle.id));
+    const demoHistory = dataSource === "simulation" && hasNewVehicles
+      ? simulationTrailHistory(network, vehicles, snapshotSeconds)
+      : new Map<string, TrailSample[]>();
 
     for (const vehicle of visibleVehicles) {
       const target = coordinateForVehicle(vehicle);
       const existing = nextMotions.get(vehicle.id);
       const from = existing ? positionAt(existing, now) : target;
-      const trip = existing ? trimTrip([...existing.trip.slice(0, -1), { position: from, timestamp: snapshotSeconds }, { position: target, timestamp: snapshotSeconds + INTERPOLATION_SECONDS }]) : [
-        { position: from, timestamp: snapshotSeconds },
-        { position: target, timestamp: snapshotSeconds + INTERPOLATION_SECONDS },
-      ];
+      const trip = updateTrail(existing?.trip ?? demoHistory.get(vehicle.id) ?? [], from, target, snapshotSeconds, reducedMotion ? 0 : INTERPOLATION_SECONDS);
       nextMotions.set(vehicle.id, {
         vehicle,
         from,
@@ -339,7 +358,7 @@ export function LiveMap({
       if (!nextIds.has(id)) nextMotions.delete(id);
     }
     renderGPURef.current(now);
-  }, [visibleVehicles, reducedMotion]);
+  }, [visibleVehicles, reducedMotion, dataSource]);
 
   renderGPURef.current = (now: number) => {
     const map = mapRef.current;
@@ -390,11 +409,12 @@ export function LiveMap({
         widthUnits: "pixels",
         widthMinPixels: 10,
         getPath: (route) => route.path,
-        getColor: (route) => colorToRgba(route.color, 76),
+        getColor: (route) => colorToRgba(route.color, currentProps.trails ? 22 : 76),
         getWidth: 10,
         jointRounded: true,
         capRounded: true,
         pickable: false,
+        parameters: OVERLAY_PARAMETERS,
       }),
       new PathLayer<RoutePoint>({
         id: "metrobus-routes",
@@ -403,28 +423,48 @@ export function LiveMap({
         widthUnits: "pixels",
         widthMinPixels: 2,
         getPath: (route) => route.path,
-        getColor: (route) => colorToRgba(route.color, 245),
+        getColor: (route) => colorToRgba(route.color, currentProps.trails ? 105 : 245),
         getWidth: 3.5,
         jointRounded: true,
         capRounded: true,
         pickable: false,
+        parameters: OVERLAY_PARAMETERS,
+      }),
+      new TripsLayer<TripPoint>({
+        id: "metrobus-trips-outline",
+        data: tripData,
+        visible: currentProps.trails === true,
+        trailLength: TRAIL_WINDOW_SECONDS,
+        currentTime,
+        fadeTrail: true,
+        widthUnits: "pixels",
+        widthMinPixels: 8,
+        getPath: (trip) => trip.path,
+        getTimestamps: (trip) => trip.timestamps,
+        getColor: [9, 17, 28, theme === "light" ? 210 : 170],
+        getWidth: 8,
+        jointRounded: true,
+        capRounded: true,
+        pickable: false,
+        parameters: OVERLAY_PARAMETERS,
       }),
       new TripsLayer<TripPoint>({
         id: "metrobus-trips",
         data: tripData,
         visible: currentProps.trails === true,
-        trailLength: INTERPOLATION_SECONDS * TRAIL_SNAPSHOT_COUNT,
+        trailLength: TRAIL_WINDOW_SECONDS,
         currentTime,
         fadeTrail: true,
         widthUnits: "pixels",
-        widthMinPixels: 2,
+        widthMinPixels: 5,
         getPath: (trip) => trip.path,
         getTimestamps: (trip) => trip.timestamps,
-        getColor: (trip) => colorToRgba(trip.color, 170),
-        getWidth: 2.4,
+        getColor: [255, 255, 255, 245],
+        getWidth: 5,
         jointRounded: true,
         capRounded: true,
         pickable: false,
+        parameters: OVERLAY_PARAMETERS,
       }),
       new ScatterplotLayer<StationPoint>({
         id: "metrobus-station-halo",
@@ -439,6 +479,7 @@ export function LiveMap({
         getLineWidth: 2,
         stroked: true,
         filled: true,
+        parameters: OVERLAY_PARAMETERS,
       }),
       new IconLayer<StationPoint>({
         id: "metrobus-stations",
@@ -453,6 +494,7 @@ export function LiveMap({
         pickable: true,
         alphaCutoff: 0.12,
         onHover: (info) => handleHover(info as GeoPickInfo<StationPoint>, "station"),
+        parameters: OVERLAY_PARAMETERS,
       }),
       new ScatterplotLayer<VehiclePoint>({
         id: "metrobus-vehicle-halo",
@@ -462,26 +504,31 @@ export function LiveMap({
         radiusMaxPixels: 14,
         getPosition: (vehicle) => vehicle.position,
         getRadius: (vehicle) => vehicle.id === currentProps.selectedId ? 14 : 9,
-        getFillColor: (vehicle) => colorToRgba(vehicle.color, vehicle.id === currentProps.selectedId ? 105 : 70),
+        getFillColor: (vehicle) => [255, 255, 255, vehicle.id === currentProps.selectedId ? 95 : 38],
+        billboard: true,
         stroked: false,
         filled: true,
         pickable: false,
+        parameters: OVERLAY_PARAMETERS,
       }),
       new ScatterplotLayer<VehiclePoint>({
         id: "metrobus-vehicles",
         data: vehiclePoints,
         radiusUnits: "pixels",
-        radiusMinPixels: 3,
-        radiusMaxPixels: 8,
+        radiusMinPixels: 5,
+        radiusMaxPixels: 9,
         getPosition: (vehicle) => vehicle.position,
-        getRadius: (vehicle) => vehicle.id === currentProps.selectedId ? 6 : 4.2,
-        getFillColor: (vehicle) => colorToRgba(vehicle.color, 255),
-        getLineColor: theme === "light" ? [40, 42, 44, 255] : [255, 255, 255, 255],
-        getLineWidth: (vehicle) => vehicle.id === currentProps.selectedId ? 2.5 : 1.2,
+        getRadius: (vehicle) => vehicle.id === currentProps.selectedId ? 7 : 5.2,
+        getFillColor: [255, 255, 255, 255],
+        getLineColor: [14, 22, 32, 255],
+        getLineWidth: (vehicle) => vehicle.id === currentProps.selectedId ? 2.5 : 1.7,
+        lineWidthUnits: "pixels",
+        billboard: true,
         stroked: true,
         filled: true,
         pickable: true,
         onHover: (info) => handleHover(info as GeoPickInfo<VehiclePoint>, "vehicle"),
+        parameters: OVERLAY_PARAMETERS,
       }),
       ...(selectedVehicle ? [new ScatterplotLayer<VehiclePoint>({
         id: "metrobus-selected-vehicle",
@@ -494,15 +541,23 @@ export function LiveMap({
         getFillColor: [255, 255, 255, 20],
         getLineColor: [255, 255, 255, 245],
         getLineWidth: 2,
+        lineWidthUnits: "pixels",
+        billboard: true,
         stroked: true,
         filled: true,
         pickable: false,
+        parameters: OVERLAY_PARAMETERS,
       })] : []),
     ];
     overlay.setProps({ layers, ...(currentProps.trails ? { currentTime } : {}) });
 
-    if (currentProps.following && currentProps.selectedId && selectedVehicle && isValidCoordinate(selectedVehicle.position)) {
-      map.setCenter(selectedVehicle.position);
+    if (currentProps.following && currentProps.selectedId && selectedVehicle && isValidCoordinate(selectedVehicle.position) && !followUpdateRef.current && !map.isMoving()) {
+      const center = map.getCenter();
+      if (distanceSquared([center.lng, center.lat], selectedVehicle.position) > 1e-16) {
+        followUpdateRef.current = true;
+        try { map.setCenter(selectedVehicle.position); }
+        finally { followUpdateRef.current = false; }
+      }
     }
   };
 
@@ -562,6 +617,8 @@ export function LiveMap({
     let canvas: HTMLCanvasElement | null = null;
     let handleWebglContextLost: ((event: Event) => void) | null = null;
     let handleMapClick: ((event: MapLayerMouseEvent) => void) | null = null;
+    let handleCameraPitch: (() => void) | null = null;
+    let handleCameraEnd: (() => void) | null = null;
     let fallbackTimer: number | undefined;
     let resizeObserver: ResizeObserver | null = null;
 
@@ -578,6 +635,8 @@ export function LiveMap({
       map?.remove();
       setOverlayMode("none");
       setMapStatus("fallback");
+      propsRef.current.onMapAvailabilityChange?.(false);
+      propsRef.current.onViewModeChange?.(false);
     };
 
     const init = async () => {
@@ -594,11 +653,35 @@ export function LiveMap({
           zoom: currentProps.variant === "hero" ? 11.3 : 10.9,
           pitch: currentProps.variant === "hero" ? 42 : 0,
           bearing: currentProps.variant === "hero" ? -15 : 0,
+          maxPitch: 65,
           attributionControl: false,
           cooperativeGestures: currentProps.variant === "hero",
         });
         appliedStyleRef.current = styleRef.current;
         mapRef.current = map;
+        view2DRef.current = flatCamera(cameraSnapshot(map));
+        syncCameraRef.current = (force = false) => {
+          if (!map || disposed) return;
+          const is3D = map.getPitch() >= 10;
+          const changed = is3D !== viewIs3DRef.current;
+          viewIs3DRef.current = is3D;
+          container.dataset.viewMode = is3D ? "3d" : "2d";
+          container.dataset.cameraPitch = map.getPitch().toFixed(1);
+          container.dataset.cameraZoom = map.getZoom().toFixed(2);
+          if (changed || force) {
+            const available = sync3DBuildings(map, is3D, preferencesRef.current.theme);
+            container.dataset.buildings3d = available ? "available" : "unavailable";
+            propsRef.current.onViewModeChange?.(is3D);
+          }
+        };
+        handleCameraPitch = () => syncCameraRef.current();
+        handleCameraEnd = () => {
+          if (!map || disposed) return;
+          if (map.getPitch() < 10 && !propsRef.current.recording) view2DRef.current = flatCamera(cameraSnapshot(map));
+          syncCameraRef.current();
+        };
+        map.on("pitch", handleCameraPitch);
+        map.on("moveend", handleCameraEnd);
         canvas = map.getCanvas();
         resizeObserver = new ResizeObserver(() => {
           if (!disposed && mapRef.current === map) {
@@ -652,7 +735,9 @@ export function LiveMap({
             };
             map.on("click", handleMapClick);
             renderGPURef.current(performance.now());
+            syncCameraRef.current(true);
             setMapStatus("ready");
+            propsRef.current.onMapAvailabilityChange?.(true);
             propsRef.current.onMapReady?.();
           } catch {
             loaded = false;
@@ -679,6 +764,9 @@ export function LiveMap({
       if (tooltipRef.current) tooltipRef.current.hidden = true;
       if (canvas && handleWebglContextLost) canvas.removeEventListener("webglcontextlost", handleWebglContextLost);
       if (map && handleMapClick) map.off("click", handleMapClick);
+      if (map && handleCameraPitch) map.off("pitch", handleCameraPitch);
+      if (map && handleCameraEnd) map.off("moveend", handleCameraEnd);
+      syncCameraRef.current = () => undefined;
       const overlay = overlayRef.current;
       overlayRef.current = null;
       try { overlay?.finalize?.(); } catch { /* deck cleanup is best effort */ }
@@ -691,7 +779,7 @@ export function LiveMap({
     const map = mapRef.current;
     if (mapStatus !== "ready" || !map || appliedStyleRef.current === styleUrl) return;
     appliedStyleRef.current = styleUrl;
-    const redraw = () => renderGPURef.current(performance.now());
+    const redraw = () => { syncCameraRef.current(true); renderGPURef.current(performance.now()); };
     map.once("style.load", redraw);
     map.setStyle(styleUrl);
     if (tooltipRef.current) tooltipRef.current.hidden = true;
@@ -733,22 +821,36 @@ export function LiveMap({
   }, [mapStatus, following, selectedId, visibleVehicles]);
 
   useEffect(() => {
-    if (mapStatus !== "ready" || !recording || !mapRef.current || reducedMotion) return;
+    if (mapStatus !== "ready" || !recording || !mapRef.current) return;
     const map = mapRef.current;
-    map.easeTo({ pitch: 54, duration: 500, essential: true });
-    const startedAt = performance.now();
-    const initialBearing = map.getBearing();
+    let previousView: CameraSnapshot | null = null;
     let frame = 0;
     let lastFrame = 0;
-    const orbit = (now: number) => {
-      if (mapRef.current === map && now - lastFrame >= FRAME_INTERVAL_MS) {
-        map.setBearing((initialBearing + ((now - startedAt) * 0.012)) % 360);
-        lastFrame = now;
-      }
+    const beginOrbit = () => {
+      if (reducedMotion || mapRef.current !== map || !propsRef.current.recording) return;
+      const startedAt = performance.now();
+      const initialBearing = map.getBearing();
+      const orbit = (now: number) => {
+        if (mapRef.current === map && now - lastFrame >= FRAME_INTERVAL_MS) {
+          map.setBearing((initialBearing + ((now - startedAt) * 0.012)) % 360);
+          lastFrame = now;
+        }
+        frame = window.requestAnimationFrame(orbit);
+      };
       frame = window.requestAnimationFrame(orbit);
     };
-    frame = window.requestAnimationFrame(orbit);
-    return () => window.cancelAnimationFrame(frame);
+    const cancelStart = afterCameraSettles(map, () => {
+      if (mapRef.current !== map || !propsRef.current.recording) return;
+      previousView = cameraSnapshot(map);
+      map.once("moveend", beginOrbit);
+      map.easeTo({ pitch: 54, duration: reducedMotion ? 0 : 500 });
+    });
+    return () => {
+      cancelStart();
+      map.off("moveend", beginOrbit);
+      window.cancelAnimationFrame(frame);
+      if (previousView && mapRef.current === map) map.easeTo({ ...previousView, duration: reducedMotion ? 0 : 450 });
+    };
   }, [mapStatus, recording, reducedMotion]);
 
   useEffect(() => {
@@ -783,27 +885,44 @@ export function LiveMap({
 
   useEffect(() => {
     if (mapStatus !== "ready" || !command || !mapRef.current || !containerRef.current || command.nonce === lastCommandNonceRef.current) return;
-    lastCommandNonceRef.current = command.nonce;
     const map = mapRef.current;
-    const currentProps = propsRef.current;
-    if (command.type === "zoom-in") map.zoomIn({ duration: reducedMotion ? 0 : 300 });
-    if (command.type === "zoom-out") map.zoomOut({ duration: reducedMotion ? 0 : 300 });
-    if (command.type === "reset") resetView(map, currentProps.network, currentProps.variant ?? "dashboard", containerRef.current, reducedMotion);
-    if (command.type === "pitch") map.easeTo({ pitch: map.getPitch() > 0 ? 0 : (currentProps.variant === "hero" ? 42 : 36), duration: reducedMotion ? 0 : 450 });
+    return afterCameraSettles(map, () => {
+      if (mapRef.current !== map || !containerRef.current || propsRef.current.command?.nonce !== command.nonce) return;
+      lastCommandNonceRef.current = command.nonce;
+      const currentProps = propsRef.current;
+      if (command.type === "zoom-in") map.zoomIn({ duration: reducedMotion ? 0 : 300 });
+      if (command.type === "zoom-out") map.zoomOut({ duration: reducedMotion ? 0 : 300 });
+      if (command.type === "reset") resetView(map, currentProps.network, currentProps.variant ?? "dashboard", containerRef.current, reducedMotion);
+      if (command.type === "pitch") {
+        const currentView = cameraSnapshot(map);
+        if (map.getPitch() >= 10) {
+          const tracked = currentProps.following && currentProps.selectedId ? motionsRef.current.get(currentProps.selectedId)?.current : undefined;
+          const target = flatCamera(view2DRef.current ?? currentView, tracked ?? currentView.center);
+          map.easeTo({ ...target, duration: reducedMotion ? 0 : 700 });
+        } else {
+          view2DRef.current = flatCamera(currentView);
+          const selected = currentProps.selectedId ? motionsRef.current.get(currentProps.selectedId)?.current : undefined;
+          map.easeTo({ ...perspectiveCamera(currentView, selected), duration: reducedMotion ? 0 : 850 });
+        }
+      }
+    });
   }, [mapStatus, command?.nonce, command?.type, reducedMotion]);
 
   const handleRetry = () => {
     setMapStatus("loading");
     setOverlayMode("pending");
+    propsRef.current.onMapAvailabilityChange?.(false);
     setRetryNonce((value) => value + 1);
   };
 
   return (
-    <div ref={containerRef} className="transit-map maplibregl-map absolute inset-0 overflow-hidden" data-map-status={mapStatus} data-overlay-mode={overlayMode} data-map-theme={theme}>
+    <div ref={containerRef} className="transit-map maplibregl-map absolute inset-0 overflow-hidden" data-map-status={mapStatus} data-overlay-mode={overlayMode} data-map-theme={theme} data-vehicle-style="white-circles" data-trails={trails ? "active" : "off"}>
       {mapStatus === "fallback" ? (
         <NetworkFallback
           network={network}
           vehicles={vehicles}
+          trails={trails}
+          dataSource={dataSource}
           selectedLines={selectedLines}
           serviceFilter={serviceFilter}
           selectedId={selectedId}

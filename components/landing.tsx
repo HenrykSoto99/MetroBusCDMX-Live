@@ -56,7 +56,7 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
         <nav className="desktop-nav" aria-label={t("Navegación principal", "Main navigation")}>
           <a href="#la-red">{t("La red", "The network")}</a><a href="#como-funciona">{t("Cómo funciona", "How it works")}</a><Link href="/docs">{t("Datos abiertos", "Open data")} <ArrowUpRight size={13}/></Link>
         </nav>
-        <div className="header-actions"><PreferenceControls/><Link className="header-login" href="/login">{t("Iniciar sesión", "Sign in")}</Link><Button asChild size="sm"><Link href="/register">{t("Crear cuenta", "Create account")} <ArrowUpRight size={15}/></Link></Button><button className="mobile-menu-button icon-button" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? t("Cerrar menú", "Close menu") : t("Abrir menú", "Open menu")} aria-expanded={menuOpen}>{menuOpen ? <X/> : <Menu/>}</button></div>
+        <div className="header-actions"><PreferenceControls/><Link className="header-login" href="/login">{t("Iniciar sesión", "Sign in")}</Link><Button asChild size="sm"><Link href="/register">{t("Crear cuenta", "Create account")} <ArrowUpRight size={15}/></Link></Button><button className="mobile-menu-button icon-button" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? t("Cerrar menú", "Close menu") : t("Abrir menú", "Open menu")} data-icon-hint={menuOpen ? t("Cerrar menú", "Close menu") : t("Abrir menú", "Open menu")} aria-expanded={menuOpen}>{menuOpen ? <X/> : <Menu/>}</button></div>
       </div>
       {menuOpen && <nav className="mobile-nav" aria-label={t("Navegación móvil", "Mobile navigation")}><a onClick={() => setMenuOpen(false)} href="#la-red">{t("La red", "The network")}</a><a onClick={() => setMenuOpen(false)} href="#como-funciona">{t("Cómo funciona", "How it works")}</a><Link href="/docs">{t("Datos abiertos", "Open data")}</Link><Link href="/login">{t("Iniciar sesión", "Sign in")}</Link><Link href="/register">{t("Crear cuenta", "Create account")}</Link></nav>}
     </header>
@@ -64,7 +64,7 @@ export function Landing({ network, initialFleet }: { network: TransitNetwork; in
     <main>
       <section className="hero" aria-label="MetroBusCDMX-Live">
         <div className="hero-map-scene">
-          <BusMap network={network} vehicles={fleet.vehicles} variant="hero" selectedLines={selectedLine ? [selectedLine] : undefined} focus={selectedLine ? { key: `hero-${selectedLine}`, lineId: selectedLine } : null} onMapReady={() => setMapReady(true)}/>
+          <BusMap network={network} vehicles={fleet.vehicles} dataSource={fleet.source} variant="hero" selectedLines={selectedLine ? [selectedLine] : undefined} focus={selectedLine ? { key: `hero-${selectedLine}`, lineId: selectedLine } : null} onMapReady={() => setMapReady(true)}/>
           <div className="hero-map-shade"/>
           <div className="hero-map-top"><span><MapPin size={12}/> {t("CIUDAD DE MÉXICO", "MEXICO CITY")}</span><span className="map-simulation"><span className="status-dot"/> {t("DEMO EN MOVIMIENTO", "MOVING DEMO")}</span></div>
           <div className="map-crosshair" aria-hidden="true"><span/><span/></div>

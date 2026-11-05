@@ -68,6 +68,10 @@ export function BusPopup({
 }: BusPopupProps) {
   const { locale, t } = useTranslation();
   const resolvedLine = line ?? (vehicle ? network.lines.find((candidate) => candidate.id === vehicle.line_id) : undefined) ?? null;
+  const trackingHint = t("Seguimiento", "Tracking");
+  const trackingDescription = following
+    ? t("Deja de seguir esta unidad en el mapa.", "Stop following this vehicle on the map.")
+    : t("Sigue esta unidad en el mapa.", "Follow this vehicle on the map.");
 
   if (vehicle && resolvedLine) {
     return (
@@ -75,14 +79,14 @@ export function BusPopup({
         <div className="vehicle-card-header">
           <span className="line-badge" style={{ background: resolvedLine.color }}>{resolvedLine.code}</span>
           <div><strong>{vehicle.id}</strong><span>{serviceLabel(vehicle.service_type, t)}</span></div>
-          <button className="icon-button" aria-label={t("Cerrar información de unidad", "Close unit information")} onClick={onClose}><X size={15} /></button>
+          <button className="icon-button" aria-label={t("Cerrar información de unidad", "Close unit information")} data-icon-hint={t("Cerrar información de unidad", "Close unit information")} onClick={onClose}><X size={15} /></button>
         </div>
         <div className="vehicle-card-direction"><ArrowUpRight size={16} /><span>{t("Hacia", "Toward")} <strong>{vehicle.direction}</strong></span></div>
         <div className="vehicle-details">
           <div><span>{t("VELOCIDAD SIMULADA", "SIMULATED SPEED")}</span><strong>{vehicle.speed}<small> km/h</small></strong></div>
           <div><span>{t("PRÓXIMA ESTACIÓN", "NEXT STATION")}</span><strong>{vehicle.next_stop}</strong></div>
         </div>
-        <button className={`follow-button ${following ? "active" : ""}`} onClick={onToggleFollow} aria-pressed={following}>
+        <button className={`follow-button ${following ? "active" : ""}`} onClick={onToggleFollow} aria-label={following ? t("Dejar de seguir la unidad", "Stop following vehicle") : t("Seguir unidad", "Follow vehicle")} data-icon-hint={trackingHint} data-icon-hint-description={trackingDescription} aria-pressed={following}>
           <Crosshair size={15} />{following ? t("Dejar de seguir", "Stop following") : t("Seguir unidad", "Follow unit")}
         </button>
         <small className="vehicle-demo">{t("Posición y velocidad de demostración", "Demo position and speed")}</small>
@@ -113,7 +117,7 @@ export function BusPopup({
             <strong>{station.name}</strong>
             <span>{resolvedLine.code} · {resolvedLine.name}</span>
           </div>
-          <button className="icon-button" aria-label={t("Cerrar estación", "Close station")} onClick={onClose}><X size={15} /></button>
+          <button className="icon-button" aria-label={t("Cerrar estación", "Close station")} data-icon-hint={t("Cerrar estación", "Close station")} onClick={onClose}><X size={15} /></button>
         </div>
 
         <dl

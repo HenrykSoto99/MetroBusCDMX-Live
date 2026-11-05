@@ -564,3 +564,9 @@ html[data-theme='light'] .error-actions > .outline-button { color: #3f4d52; }
 html[data-theme='light'] .mobile-user-controls{color:#48565d;border-top-color:#25282a24}
 html[data-theme='light'] .mobile-user-controls a,
 html[data-theme='light'] .mobile-user-controls button{color:#27373f}
+
+/* Neutral fleet legend and camera availability. Tooltips remain usable on unavailable controls. */
+.map-controls button[aria-pressed='true'] { color: var(--red); background: #e3061318; }
+.map-controls button[aria-disabled='true'] { opacity: .55; cursor: not-allowed; }
+.map-bottom-status { max-width: calc(100% - 30px); flex-wrap: wrap; }
+.white-vehicle-key { white-space: nowrap; }

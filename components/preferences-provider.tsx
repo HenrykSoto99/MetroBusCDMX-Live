@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { usePreferences } from "@/lib/preferences";
+import { IconHints } from "@/components/icon-hints";
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const { language, theme } = usePreferences();
@@ -37,5 +38,5 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     return () => observer.disconnect();
   }, [language, pathname]);
 
-  return children;
+  return <>{children}<IconHints /></>;
 }

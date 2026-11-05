@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Coordinate, Station, TransitLine, TransitNetwork, Vehicle } from "@/lib/transit-types";
 import { usePreferences, useTranslation } from "@/lib/preferences";
+import { simulationTrailHistory, updateTrail, TRAIL_WINDOW_SECONDS, type TrailSample } from "@/lib/vehicle-trails";
 
 export interface NetworkFallbackProps {
   network: TransitNetwork;
   vehicles?: Vehicle[];
+  trails?: boolean;
+  dataSource?: "simulation" | "gtfs-rt";
   selectedLines?: number[];
   serviceFilter?: string;
   selectedId?: string | null;
@@ -67,6 +70,8 @@ function networkBounds(network: TransitNetwork, lines: TransitLine[]): [number, 
 export function NetworkFallback({
   network,
   vehicles = [],
+  trails = false,
+  dataSource = "gtfs-rt",
   selectedLines,
   serviceFilter,
   selectedId,
@@ -79,6 +84,28 @@ export function NetworkFallback({
   const { theme } = usePreferences();
   const { t } = useTranslation();
   const background = theme === "light" ? "#f4f5f2" : "#101822";
+  const historyRef = useRef(new Map<string, TrailSample[]>());
+  const historySourceRef = useRef(dataSource);
+  const [history, setHistory] = useState(new Map<string, TrailSample[]>());
+  useEffect(() => {
+    const epoch = Date.parse(vehicles[0]?.timestamp ?? "") / 1000;
+    if (!Number.isFinite(epoch)) return;
+    if (historySourceRef.current !== dataSource) historyRef.current.clear();
+    historySourceRef.current = dataSource;
+    const next = dataSource === "simulation"
+      ? simulationTrailHistory(network, vehicles, epoch)
+      : new Map<string, TrailSample[]>();
+    if (dataSource === "gtfs-rt") {
+      for (const vehicle of vehicles) {
+        const time = Date.parse(vehicle.timestamp) / 1000;
+        if (!Number.isFinite(time) || !Number.isFinite(vehicle.longitude) || !Number.isFinite(vehicle.latitude)) continue;
+        const point: Coordinate = [vehicle.longitude, vehicle.latitude];
+        next.set(vehicle.id, updateTrail(historyRef.current.get(vehicle.id) ?? [], point, point, time, 0));
+      }
+    }
+    historyRef.current = next;
+    setHistory(next);
+  }, [network, vehicles, dataSource]);
   const selectedIds = useMemo(() => new Set(selectedLineIds(selectedLines)), [selectedLines]);
   const lines = useMemo(
     () => network.lines.filter((line) => selectedIds.has(line.id)),
@@ -112,7 +139,7 @@ export function NetworkFallback({
               <path
                 d={pathForLine(line, bounds)}
                 fill="none"
-                opacity="0.25"
+                opacity={trails ? 0.08 : 0.25}
                 stroke={line.color}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -122,7 +149,7 @@ export function NetworkFallback({
               <path
                 d={pathForLine(line, bounds)}
                 fill="none"
-                opacity="0.95"
+                opacity={trails ? 0.4 : 0.95}
                 stroke={line.color}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -131,6 +158,21 @@ export function NetworkFallback({
             </g>
           ))}
         </g>
+        {trails && <g aria-label={t("Estelas de unidades · últimos 72 segundos", "Vehicle trails · last 72 seconds")}>
+          {visibleVehicles.flatMap((vehicle) => {
+            const samples = history.get(vehicle.id) ?? [];
+            const currentTime = samples.at(-1)?.timestamp ?? 0;
+            return samples.slice(1).map((sample, index) => {
+              const from = projectPoint(samples[index].position, bounds);
+              const to = projectPoint(sample.position, bounds);
+              const opacity = Math.max(0, Math.min(1, (sample.timestamp - currentTime + TRAIL_WINDOW_SECONDS) / TRAIL_WINDOW_SECONDS));
+              return <g key={`trail-${vehicle.id}-${index}`} opacity={opacity}>
+                <path d={`M${from.x} ${from.y} L${to.x} ${to.y}`} stroke="#09111c" strokeWidth="8" strokeLinecap="round" fill="none" vectorEffect="non-scaling-stroke" />
+                <path d={`M${from.x} ${from.y} L${to.x} ${to.y}`} stroke="#ffffff" strokeWidth="5" strokeLinecap="round" fill="none" vectorEffect="non-scaling-stroke" />
+              </g>;
+            });
+          })}
+        </g>}
         <g aria-label={t("Estaciones", "Stations")}>
           {lines.flatMap((line) =>
             line.stations.map((station) => {
@@ -141,6 +183,8 @@ export function NetworkFallback({
                   className="cursor-pointer"
                   role="button"
                   aria-label={`${station.name} · ${line.code}`}
+                  data-icon-hint={`${station.name} · ${line.code}`}
+                  data-icon-hint-description={`ID: ${station.id}`}
                   tabIndex={0}
                   onClick={() => onStationSelect?.(station, line.id)}
                   onKeyDown={(event) => {
@@ -169,14 +213,17 @@ export function NetworkFallback({
                 key={`fallback-vehicle-${vehicle.id}`}
                 className="cursor-pointer"
                 role="button"
+                aria-label={`${vehicle.id} · ${line.code}`}
+                data-icon-hint={`${vehicle.id} · ${line.code}`}
+                data-icon-hint-description={`${Math.round(vehicle.speed)} km/h · ${vehicle.next_stop}`}
                 tabIndex={0}
                 onClick={() => onVehicleSelect?.(vehicle.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") onVehicleSelect?.(vehicle.id);
                 }}
               >
-                <circle cx={point.x} cy={point.y} fill={line.color} opacity="0.35" r={selected ? 13 : 9} filter="url(#network-fallback-glow)" />
-                <circle cx={point.x} cy={point.y} fill={line.color} r={selected ? 5.5 : 3.8} stroke={selected ? "#f8fafc" : "#0b1017"} strokeWidth={selected ? 2.5 : 1.25} />
+                <circle cx={point.x} cy={point.y} fill="#ffffff" opacity="0.35" r={selected ? 13 : 9} filter="url(#network-fallback-glow)" />
+                <circle cx={point.x} cy={point.y} fill="#ffffff" r={selected ? 7 : 5.2} stroke="#0e1620" strokeWidth={selected ? 2.5 : 1.7} />
                 <title>{`${line.code} · ${vehicle.id} · ${Math.round(vehicle.speed)} km/h · ${t("Próxima", "Next")}: ${vehicle.next_stop}`}</title>
               </g>
             );
@@ -186,6 +233,8 @@ export function NetworkFallback({
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-4 p-4">
         <div className="map-fallback-note max-w-sm rounded-md border border-white/15 bg-[#101822]/85 px-3 py-2 text-xs text-white/80 shadow-lg backdrop-blur-sm">
           {t("Vista de red · base cartográfica no disponible", "Network view · basemap unavailable")}
+          <span className="block mt-1">{t("Vista esquemática 2D. Reintenta para usar cámara y edificios 3D.", "Schematic 2D view. Retry to use the camera and 3D buildings.")}</span>
+          {trails && <span className="block mt-1">{t("Estelas del historial disponible · hasta 72 s", "Trails from available history · up to 72 s")}</span>}
         </div>
         <div className="text-right text-[10px] tracking-wide text-white/50">CARTO · OpenStreetMap</div>
       </div>
