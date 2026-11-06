@@ -589,3 +589,7 @@ html[data-theme='light'] .hero-map-controls button:hover { background: #25282a06
 
 .filter-line[role='checkbox'] { width: 100%; text-align: left; }
 .filter-line[role='checkbox']:focus-visible { outline: 1px solid #ee6970; outline-offset: 3px; }
+
+/* KarmaByte Society credit — landing footer only */
+.footer-credit{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border);font-size:8px;color:#777f82}.footer-credit>span{display:flex;align-items:center;gap:4px}.footer-credit a{display:inline-flex;align-items:center;gap:3px;color:inherit;transition:color .25s ease}.footer-credit a:hover,.footer-credit a:focus-visible{color:#fff}.footer-socials{display:flex;align-items:center;gap:12px}.footer-socials a{width:25px;height:25px;display:grid;place-items:center;border:1px solid var(--border);border-radius:50%;transition:color .25s ease,background-color .25s ease,border-color .25s ease,transform .25s ease}.footer-socials svg{width:13px;height:13px}.footer-socials a:hover,.footer-socials a:focus-visible{color:#fff;background:#e30613;border-color:#e30613;transform:translateY(-3px)}
+@media(max-width:760px){.footer-credit{flex-wrap:wrap;gap:13px;margin-top:18px;padding-top:15px;font-size:7px}.footer-socials{gap:9px}.footer-socials a{width:24px;height:24px}}
